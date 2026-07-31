@@ -149,7 +149,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private func updateHardwareSummary() {
     guard let c = localController else { return }
     let count = (try? c.fanCount()) ?? fans.count
-    let summary = L.hardwareSummary(model: SMCConnection.hardwareModel(), fanCount: count)
+    let summary = L.hardwareSummary(fanCount: count)
     onMain { self.hardwareSummary = summary }
   }
 
@@ -332,8 +332,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       let newFans = (try? c.allFans()) ?? []
       let temps = c.readTemperatures(primaryOnly: true)
       let count = (try? c.fanCount()) ?? newFans.count
-      let summary = L.hardwareSummary(
-        model: SMCConnection.hardwareModel(), fanCount: count)
+      let summary = L.hardwareSummary(fanCount: count)
 
       onMain {
         if !newFans.isEmpty { self.fans = newFans }

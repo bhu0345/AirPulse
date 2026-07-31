@@ -117,9 +117,9 @@ struct L10n {
   var ftstYes: String { t("yes", "有") }
   var ftstNo: String { t("no", "无") }
 
-  func hardwareSummary(model: String, fanCount: Int) -> String {
+  func hardwareSummary(fanCount: Int) -> String {
     let fansWord = t("fans", "个风扇")
-    return "\(model) · \(fanCount) \(fansWord)"
+    return "\(fanCount) \(fansWord)"
   }
 
   func presetTitle(_ preset: FanPreset) -> String {
