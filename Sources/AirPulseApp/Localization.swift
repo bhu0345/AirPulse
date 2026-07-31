@@ -70,6 +70,7 @@ struct L10n {
   var restoreAuto: String { t("Restore Auto", "恢复自动") }
   var quit: String { t("Quit", "退出") }
   var languageLabel: String { t("Language", "语言") }
+  var statusLabel: String { t("Status:", "状态：") }
   var enableFanControl: String { t("Enable Fan Control", "启用风扇控制") }
   var enableFanControlHint: String {
     t(

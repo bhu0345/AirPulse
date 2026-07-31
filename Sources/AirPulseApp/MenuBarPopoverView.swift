@@ -5,6 +5,8 @@ struct MenuBarPopoverView: View {
   @ObservedObject var service: FanService
   @ObservedObject private var languageStore = LanguageStore.shared
   @State private var showAdvanced = false
+  @State private var linkedSliderValue: Double = 0.3
+  @State private var isDraggingLinked = false
 
   private var L: L10n { languageStore.strings }
 
@@ -27,6 +29,14 @@ struct MenuBarPopoverView: View {
     .frame(width: 340)
     .background(popoverBackground)
     .id(languageStore.language)
+    .onAppear {
+      linkedSliderValue = service.linkedFraction
+    }
+    .onChange(of: service.linkedFraction) { _, newValue in
+      if !isDraggingLinked {
+        linkedSliderValue = newValue
+      }
+    }
   }
 
   private var header: some View {
@@ -40,10 +50,15 @@ struct MenuBarPopoverView: View {
           .lineLimit(2)
       }
       Spacer()
-      Circle()
-        .fill(service.canWrite ? Color.green.opacity(0.85) : Color.orange.opacity(0.85))
-        .frame(width: 8, height: 8)
-        .help(service.canWrite ? L.writable : L.readOnlyNeedAuth)
+      HStack(spacing: 6) {
+        Text(L.statusLabel)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Circle()
+          .fill(service.canWrite ? Color.green.opacity(0.85) : Color.orange.opacity(0.85))
+          .frame(width: 8, height: 8)
+          .help(service.canWrite ? L.writable : L.readOnlyNeedAuth)
+      }
     }
   }
 
@@ -177,18 +192,14 @@ struct MenuBarPopoverView: View {
         HStack {
           Image(systemName: "fanblades")
             .foregroundStyle(.secondary)
-          Slider(
-            value: Binding(
-              get: { service.linkedFraction },
-              set: { service.linkedFraction = $0 }
-            ),
-            in: 0...1
-          ) { editing in
+          Slider(value: $linkedSliderValue, in: 0...1) { editing in
+            isDraggingLinked = editing
+            service.isDraggingSlider = editing
             if !editing {
-              service.applyLinkedFraction(service.linkedFraction)
+              service.applyLinkedFraction(linkedSliderValue)
             }
           }
-          Text("\(Int(service.linkedFraction * 100))%")
+          Text("\(Int(linkedSliderValue * 100))%")
             .font(.system(.caption, design: .monospaced))
             .frame(width: 36, alignment: .trailing)
         }

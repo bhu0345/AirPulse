@@ -100,6 +100,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
   @Published var unlinkRPM: [Int: Double] = [:]
   @Published var isInstallingHelper = false
 
+  /// While true, refresh must not overwrite the linked slider position.
+  var isDraggingSlider = false
+
   private var xpc: HelperXPCClient?
   private var pollTimer: DispatchSourceTimer?
   private var localController: FanController?
@@ -344,7 +347,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
             self.unlinkRPM[fan.index] = Double((fan.actualRPM - fan.minRPM) / span)
           }
         }
-        if self.activePreset != .auto, let first = newFans.first, first.maxRPM > first.minRPM {
+        if !self.isDraggingSlider, self.activePreset != .auto,
+          let first = newFans.first, first.maxRPM > first.minRPM
+        {
           self.linkedFraction = Double(
             (first.targetRPM - first.minRPM) / (first.maxRPM - first.minRPM))
         }
