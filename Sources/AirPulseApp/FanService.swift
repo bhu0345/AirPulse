@@ -4,8 +4,8 @@ import FanKit
 import Foundation
 import SMCKit
 
-/// Talks to the privileged helper over XPC when available; otherwise uses
-/// in-process SMC for reads and a local privileged CLI bridge for writes.
+/// Talks to the privileged helper over XPC when available.
+/// Writes require the installed helper — no per-action osascript password prompts.
 @MainActor
 final class FanService: ObservableObject {
   @Published var fans: [FanSnapshot] = []
@@ -18,6 +18,7 @@ final class FanService: ObservableObject {
   @Published var hardwareSummary: String = ""
   @Published var safetyNotice: String?
   @Published var unlinkRPM: [Int: Double] = [:]
+  @Published var isInstallingHelper = false
 
   private var connection: NSXPCConnection?
   private var pollTask: Task<Void, Never>?
@@ -48,36 +49,38 @@ final class FanService: ObservableObject {
     connection?.invalidate()
   }
 
-  /// Refresh status strings after the user changes language.
   func reloadLocalizedStrings() {
     let L = self.L
     if canWrite {
       statusMessage = L.helperConnected
-    } else if statusMessage.isEmpty || !statusMessage.contains("SMC") {
+    } else {
       statusMessage = L.monitorMode
     }
-    if let c = localController {
-      hardwareSummary =
-        "\(SMCConnection.hardwareModel()) · mode \(c.config.modeKeyFormat) · Ftst \(c.config.ftstAvailable ? L.ftstYes : L.ftstNo)"
-    }
+    updateHardwareSummary()
     enforceSafetyLocally()
   }
 
+  private func updateHardwareSummary() {
+    guard let c = localController else { return }
+    let count = (try? c.fanCount()) ?? fans.count
+    hardwareSummary = L.hardwareSummary(model: SMCConnection.hardwareModel(), fanCount: count)
+  }
+
   private func openLocalRead() {
-    let L = self.L
     do {
       localController = FanController(connection: try SMCConnection())
-      if let c = localController {
-        hardwareSummary =
-          "\(SMCConnection.hardwareModel()) · mode \(c.config.modeKeyFormat) · Ftst \(c.config.ftstAvailable ? L.ftstYes : L.ftstNo)"
-      }
+      updateHardwareSummary()
     } catch {
       statusMessage = "\(L.smcReadFailed): \(error.localizedDescription)"
     }
   }
 
   private func tryConnectHelper() {
-    let conn = NSXPCConnection(machServiceName: AirPulseConfig.helperMachService, options: [.privileged])
+    connection?.invalidate()
+    let conn = NSXPCConnection(
+      machServiceName: AirPulseConfig.helperMachService,
+      options: [.privileged]
+    )
     conn.remoteObjectInterface = NSXPCInterface(with: AirPulseHelperProtocol.self)
     conn.invalidationHandler = { [weak self] in
       Task { @MainActor in
@@ -85,18 +88,29 @@ final class FanService: ObservableObject {
         self?.connection = nil
       }
     }
+    conn.interruptionHandler = { [weak self] in
+      Task { @MainActor in
+        self?.canWrite = false
+      }
+    }
     conn.resume()
     connection = conn
 
-    guard let proxy = conn.remoteObjectProxy as? AirPulseHelperProtocol else { return }
-    proxy.ping { [weak self] _ in
+    let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] _ in
+      Task { @MainActor in
+        self?.canWrite = false
+      }
+    } as? AirPulseHelperProtocol
+
+    proxy?.ping { [weak self] _ in
       Task { @MainActor in
         self?.canWrite = true
         self?.statusMessage = LanguageStore.shared.strings.helperConnected
       }
     }
+
     Task { @MainActor in
-      try? await Task.sleep(nanoseconds: 800_000_000)
+      try? await Task.sleep(nanoseconds: 600_000_000)
       if self.canWrite == false {
         self.statusMessage = self.L.monitorMode
       }
@@ -104,13 +118,126 @@ final class FanService: ObservableObject {
   }
 
   private func helper() -> AirPulseHelperProtocol? {
-    connection?.remoteObjectProxy as? AirPulseHelperProtocol
+    guard canWrite, let connection else { return nil }
+    return connection.remoteObjectProxy as? AirPulseHelperProtocol
+  }
+
+  /// One-time install of the LaunchDaemon helper (single password prompt).
+  func installHelper() {
+    let L = self.L
+    let helperURL = Bundle.main.bundleURL
+      .appendingPathComponent("Contents/MacOS/AirPulseHelper")
+    var helperPath = helperURL.path
+    if !FileManager.default.isExecutableFile(atPath: helperPath) {
+      helperPath = ProductPaths.helperPath
+    }
+    guard FileManager.default.isExecutableFile(atPath: helperPath) else {
+      statusMessage = L.helperMissingBinary
+      return
+    }
+
+    isInstallingHelper = true
+    statusMessage = L.helperInstalling
+
+    let dst = "/usr/local/libexec/AirPulseHelper"
+    let plistPath = "/Library/LaunchDaemons/\(AirPulseConfig.helperLabel).plist"
+    let label = AirPulseConfig.helperLabel
+    let mach = AirPulseConfig.helperMachService
+
+    let script = """
+    #!/bin/bash
+    set -euo pipefail
+    mkdir -p /usr/local/libexec
+    cp "\(helperPath)" "\(dst)"
+    chmod 755 "\(dst)"
+    cat > "\(plistPath)" <<'PLIST'
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+      <key>Label</key>
+      <string>\(label)</string>
+      <key>ProgramArguments</key>
+      <array>
+        <string>\(dst)</string>
+      </array>
+      <key>MachServices</key>
+      <dict>
+        <key>\(mach)</key>
+        <true/>
+      </dict>
+      <key>RunAtLoad</key>
+      <true/>
+      <key>KeepAlive</key>
+      <true/>
+    </dict>
+    </plist>
+    PLIST
+    launchctl bootout system/\(label) 2>/dev/null || true
+    launchctl bootstrap system "\(plistPath)"
+    launchctl enable system/\(label)
+    """
+
+    let tempURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("airpulse-install-helper.sh")
+    do {
+      try script.write(to: tempURL, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes(
+        [.posixPermissions: 0o755],
+        ofItemAtPath: tempURL.path
+      )
+    } catch {
+      isInstallingHelper = false
+      statusMessage = error.localizedDescription
+      return
+    }
+
+    let scriptPath = tempURL.path
+    let appleScript =
+      "do shell script \"/bin/bash \(scriptPath.replacingOccurrences(of: "\"", with: "\\\""))\" with administrator privileges"
+
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      let proc = Process()
+      proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+      proc.arguments = ["-e", appleScript]
+      do {
+        try proc.run()
+        proc.waitUntilExit()
+        let ok = proc.terminationStatus == 0
+        DispatchQueue.main.async {
+          guard let self else { return }
+          self.isInstallingHelper = false
+          try? FileManager.default.removeItem(at: tempURL)
+          if ok {
+            Task { @MainActor in
+              try? await Task.sleep(nanoseconds: 800_000_000)
+              self.tryConnectHelper()
+              try? await Task.sleep(nanoseconds: 800_000_000)
+              if self.canWrite {
+                self.statusMessage = self.L.helperConnected
+              } else {
+                self.statusMessage = self.L.helperInstallFailed
+              }
+            }
+          } else {
+            self.statusMessage = self.L.helperInstallFailed
+          }
+        }
+      } catch {
+        DispatchQueue.main.async {
+          self?.isInstallingHelper = false
+          self?.statusMessage = error.localizedDescription
+          try? FileManager.default.removeItem(at: tempURL)
+        }
+      }
+    }
   }
 
   func refresh() {
     if let c = localController {
       fans = (try? c.allFans()) ?? fans
       temperatures = c.readTemperatures(primaryOnly: true)
+      updateHardwareSummary()
       if unlinkRPM.isEmpty {
         for fan in fans {
           let span = max(1, fan.maxRPM - fan.minRPM)
@@ -132,46 +259,44 @@ final class FanService: ObservableObject {
     }
   }
 
+  private func requireWriteAccess() -> Bool {
+    if canWrite { return true }
+    statusMessage = L.needHelperToWrite
+    return false
+  }
+
   func applyPreset(_ preset: FanPreset) {
     activePreset = preset
     desiredManual = preset != .auto
     if let fraction = preset.speedFraction {
       linkedFraction = fraction
     }
+    guard requireWriteAccess(), let helper = helper() else { return }
 
-    if let helper = helper(), canWrite {
-      helper.applyPreset(preset.rawValue) { [weak self] ok, err in
-        Task { @MainActor in
-          guard let self else { return }
-          let L = self.L
-          self.statusMessage = ok ? L.presetStatus(preset) : (err ?? L.failed)
-          self.refresh()
-        }
+    helper.applyPreset(preset.rawValue) { [weak self] ok, err in
+      Task { @MainActor in
+        guard let self else { return }
+        let L = self.L
+        self.statusMessage = ok ? L.presetStatus(preset) : (err ?? L.failed)
+        self.refresh()
       }
-      return
     }
-
-    runPrivilegedCLI(["preset", preset.rawValue])
   }
 
   func applyLinkedFraction(_ fraction: Double) {
     linkedFraction = fraction
     activePreset = .balanced
     desiredManual = true
+    guard requireWriteAccess(), let helper = helper() else { return }
 
-    if let helper = helper(), canWrite {
-      helper.setLinkedFraction(fraction) { [weak self] ok, err in
-        Task { @MainActor in
-          guard let self else { return }
-          let L = self.L
-          self.statusMessage =
-            ok ? L.linkedStatus(Int(fraction * 100)) : (err ?? L.failed)
-          self.refresh()
-        }
+    helper.setLinkedFraction(fraction) { [weak self] ok, err in
+      Task { @MainActor in
+        guard let self else { return }
+        let L = self.L
+        self.statusMessage = ok ? L.linkedStatus(Int(fraction * 100)) : (err ?? L.failed)
+        self.refresh()
       }
-      return
     }
-    runPrivilegedCLI(["linked", String(format: "%.3f", fraction)])
   }
 
   func applyUnlinked(fanIndex: Int, fraction: Double) {
@@ -179,61 +304,30 @@ final class FanService: ObservableObject {
     desiredManual = true
     guard let fan = fans.first(where: { $0.index == fanIndex }) else { return }
     let rpm = fan.minRPM + Float(fraction) * (fan.maxRPM - fan.minRPM)
-    if let helper = helper(), canWrite {
-      helper.setFanRPM(UInt(fanIndex), rpm: rpm) { [weak self] ok, err in
-        Task { @MainActor in
-          guard let self else { return }
-          let L = self.L
-          self.statusMessage =
-            ok ? L.fanRPMStatus(fanIndex, rpm: Int(rpm)) : (err ?? L.failed)
-          self.refresh()
-        }
+    guard requireWriteAccess(), let helper = helper() else { return }
+
+    helper.setFanRPM(UInt(fanIndex), rpm: rpm) { [weak self] ok, err in
+      Task { @MainActor in
+        guard let self else { return }
+        let L = self.L
+        self.statusMessage = ok ? L.fanRPMStatus(fanIndex, rpm: Int(rpm)) : (err ?? L.failed)
+        self.refresh()
       }
-      return
     }
-    runPrivilegedCLI(["set", String(fanIndex), String(Int(rpm))])
   }
 
   func restoreAuto() {
     activePreset = .auto
     desiredManual = false
-    if let helper = helper(), canWrite {
-      helper.restoreAuto { [weak self] ok, err in
-        Task { @MainActor in
-          guard let self else { return }
-          let L = self.L
-          self.statusMessage = ok ? L.restoredAuto : (err ?? L.failed)
-          self.refresh()
-        }
-      }
-      return
-    }
-    runPrivilegedCLI(["auto"])
-  }
+    guard requireWriteAccess(), let helper = helper() else { return }
 
-  private func runPrivilegedCLI(_ args: [String]) {
-    let L = self.L
-    let cli = Bundle.main.bundleURL
-      .appendingPathComponent("Contents/MacOS/airpulse-cli").path
-    let fallback = ProductPaths.cliPath
-    let exe = FileManager.default.isExecutableFile(atPath: cli) ? cli : fallback
-    guard FileManager.default.isExecutableFile(atPath: exe) else {
-      statusMessage = L.cliMissing
-      return
-    }
-    let argString = args.map { "'\($0)'" }.joined(separator: " ")
-    let script =
-      "do shell script \"'\(exe)' \(argString)\" with administrator privileges"
-    let proc = Process()
-    proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-    proc.arguments = ["-e", script]
-    do {
-      try proc.run()
-      proc.waitUntilExit()
-      statusMessage = proc.terminationStatus == 0 ? L.appliedAdmin : L.writeFailed
-      refresh()
-    } catch {
-      statusMessage = error.localizedDescription
+    helper.restoreAuto { [weak self] ok, err in
+      Task { @MainActor in
+        guard let self else { return }
+        let L = self.L
+        self.statusMessage = ok ? L.restoredAuto : (err ?? L.failed)
+        self.refresh()
+      }
     }
   }
 
@@ -254,7 +348,7 @@ final class FanService: ObservableObject {
       queue: .main
     ) { [weak self] _ in
       Task { @MainActor in
-        guard let self, self.desiredManual else { return }
+        guard let self, self.desiredManual, self.canWrite else { return }
         self.statusMessage = self.L.reassertAfterWake
         if self.linkedEnabled {
           self.applyLinkedFraction(self.linkedFraction)
@@ -273,10 +367,10 @@ final class FanService: ObservableObject {
     switch safety.evaluate(maxTemp: maxTemp) {
     case .restoreAuto:
       safetyNotice = L.safetyCritical
-      if desiredManual { restoreAuto() }
+      if desiredManual, canWrite { restoreAuto() }
     case .forceCool:
       safetyNotice = L.safetyWarning
-      if activePreset != .cool { applyPreset(.cool) }
+      if activePreset != .cool, canWrite { applyPreset(.cool) }
     case .none:
       safetyNotice = nil
     }
@@ -291,6 +385,16 @@ enum ProductPaths {
       "\(cwd)/.build/debug/airpulse-cli",
       "\(cwd)/Products/AirPulse.app/Contents/MacOS/airpulse-cli",
       "\(cwd)/Release/AirPulse.app/Contents/MacOS/airpulse-cli",
+    ]
+    return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? candidates[0]
+  }
+
+  static var helperPath: String {
+    let cwd = FileManager.default.currentDirectoryPath
+    let candidates = [
+      "\(cwd)/.build/release/AirPulseHelper",
+      "\(cwd)/Products/AirPulse.app/Contents/MacOS/AirPulseHelper",
+      "\(cwd)/Release/AirPulse.app/Contents/MacOS/AirPulseHelper",
     ]
     return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? candidates[0]
   }

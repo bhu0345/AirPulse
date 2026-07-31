@@ -11,7 +11,11 @@ struct MenuBarPopoverView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       header
+      languageRow
       temperatureRow
+      if !service.canWrite {
+        enableHelperBanner
+      }
       presetRow
       linkedSlider
       if showAdvanced || !service.linkedEnabled {
@@ -41,6 +45,53 @@ struct MenuBarPopoverView: View {
         .frame(width: 8, height: 8)
         .help(service.canWrite ? L.writable : L.readOnlyNeedAuth)
     }
+  }
+
+  private var languageRow: some View {
+    HStack {
+      Text(L.languageLabel)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      Spacer()
+      Picker("", selection: Binding(
+        get: { languageStore.language },
+        set: { newValue in
+          languageStore.language = newValue
+          service.reloadLocalizedStrings()
+        }
+      )) {
+        ForEach(AppLanguage.allCases) { lang in
+          Text(lang.displayName).tag(lang)
+        }
+      }
+      .pickerStyle(.segmented)
+      .frame(width: 180)
+      .labelsHidden()
+    }
+  }
+
+  private var enableHelperBanner: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(L.enableFanControlHint)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      Button {
+        service.installHelper()
+      } label: {
+        Text(L.enableFanControl)
+          .font(.system(size: 13, weight: .semibold))
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 8)
+      }
+      .buttonStyle(.borderedProminent)
+      .disabled(service.isInstallingHelper)
+    }
+    .padding(10)
+    .background(
+      RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .fill(Color.accentColor.opacity(0.08))
+    )
   }
 
   private var temperatureRow: some View {
@@ -212,22 +263,6 @@ struct MenuBarPopoverView: View {
         }
         .buttonStyle(.borderless)
         .font(.caption)
-
-        Picker(L.languageLabel, selection: Binding(
-          get: { languageStore.language },
-          set: { newValue in
-            languageStore.language = newValue
-            service.reloadLocalizedStrings()
-          }
-        )) {
-          ForEach(AppLanguage.allCases) { lang in
-            Text(lang.displayName).tag(lang)
-          }
-        }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .controlSize(.small)
-        .frame(width: 88)
 
         Spacer()
 

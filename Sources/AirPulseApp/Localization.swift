@@ -63,15 +63,30 @@ struct L10n {
   var restoreAuto: String { t("Restore Auto", "恢复自动") }
   var quit: String { t("Quit", "退出") }
   var languageLabel: String { t("Language", "语言") }
+  var enableFanControl: String { t("Enable Fan Control", "启用风扇控制") }
+  var enableFanControlHint: String {
+    t(
+      "One-time password to install a system helper — then no more prompts.",
+      "只需输入一次密码安装系统助手，之后不再弹窗。"
+    )
+  }
+  var helperInstalling: String { t("Installing helper…", "正在安装助手…") }
+  var helperInstallFailed: String { t("Helper install failed", "助手安装失败") }
+  var helperMissingBinary: String {
+    t("Helper binary not found in the app bundle", "应用内未找到 Helper 程序")
+  }
+  var needHelperToWrite: String {
+    t("Tap Enable Fan Control first (one-time setup)", "请先点「启用风扇控制」（只需一次）")
+  }
 
   var connecting: String { t("Connecting…", "正在连接…") }
   var readingSensors: String { t("Reading sensors…", "读取传感器…") }
   var smcReadFailed: String { t("SMC read failed", "SMC 读取失败") }
-  var helperConnected: String { t("Privileged helper connected", "已连接特权 Helper") }
+  var helperConnected: String { t("Fan control ready", "风扇控制已就绪") }
   var monitorMode: String {
     t(
-      "Monitor mode (install Helper or use sudo CLI to write)",
-      "监视模式（写入需安装 Helper 或使用 sudo CLI）"
+      "Monitoring only — enable fan control to change speeds",
+      "仅监视中 — 启用风扇控制后才能调速"
     )
   }
   var presetApplied: String { t("Preset", "预设") }
@@ -94,6 +109,11 @@ struct L10n {
   }
   var ftstYes: String { t("yes", "有") }
   var ftstNo: String { t("no", "无") }
+
+  func hardwareSummary(model: String, fanCount: Int) -> String {
+    let fansWord = t("fans", "个风扇")
+    return "\(model) · \(fanCount) \(fansWord)"
+  }
 
   func presetTitle(_ preset: FanPreset) -> String {
     switch preset {
