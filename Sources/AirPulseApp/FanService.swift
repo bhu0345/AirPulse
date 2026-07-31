@@ -4,62 +4,96 @@ import FanKit
 import Foundation
 import SMCKit
 
-/// Holds the XPC connection and forwards callbacks onto the main actor safely.
-/// XPC queues are not MainActor — calling @MainActor FanService directly from
-/// those queues crashes with EXC_BREAKPOINT (dispatch_assert_queue_fail).
+// MARK: - XPC client (never touches MainActor-isolated types)
+
 final class HelperXPCClient: @unchecked Sendable {
   private let connection: NSXPCConnection
-  private let onConnected: @Sendable () -> Void
-  private let onDisconnected: @Sendable () -> Void
 
-  init(
-    machServiceName: String,
-    onConnected: @escaping @Sendable () -> Void,
-    onDisconnected: @escaping @Sendable () -> Void
-  ) {
-    self.onConnected = onConnected
-    self.onDisconnected = onDisconnected
+  init(machServiceName: String) {
     let conn = NSXPCConnection(machServiceName: machServiceName, options: [.privileged])
     conn.remoteObjectInterface = NSXPCInterface(with: AirPulseHelperProtocol.self)
     self.connection = conn
-
-    conn.invalidationHandler = { [onDisconnected] in
-      onDisconnected()
-    }
-    conn.interruptionHandler = { [onDisconnected] in
-      onDisconnected()
-    }
     conn.resume()
+  }
 
-    let proxy = conn.remoteObjectProxyWithErrorHandler { [onDisconnected] _ in
-      onDisconnected()
+  private func proxy(
+    onError: @escaping @Sendable () -> Void
+  ) -> AirPulseHelperProtocol? {
+    connection.remoteObjectProxyWithErrorHandler { _ in
+      onError()
     } as? AirPulseHelperProtocol
+  }
 
-    proxy?.ping { [onConnected] _ in
-      onConnected()
+  func setDisconnectHandler(_ handler: @escaping @Sendable () -> Void) {
+    connection.invalidationHandler = handler
+    connection.interruptionHandler = handler
+  }
+
+  func ping(completion: @escaping @Sendable (Bool) -> Void) {
+    let p = proxy { completion(false) }
+    guard let p else {
+      completion(false)
+      return
+    }
+    p.ping { _ in completion(true) }
+  }
+
+  func listFans(completion: @escaping @Sendable ([FanSnapshot]) -> Void) {
+    let p = proxy { completion([]) }
+    p?.listFans { data, _ in
+      let fans = (data ?? []).compactMap { AirPulseCoding.decode(FanSnapshot.self, from: $0) }
+      completion(fans)
     }
   }
 
-  func proxy() -> AirPulseHelperProtocol? {
-    connection.remoteObjectProxyWithErrorHandler { [onDisconnected] _ in
-      onDisconnected()
-    } as? AirPulseHelperProtocol
+  func applyPreset(
+    _ raw: String,
+    completion: @escaping @Sendable (Bool, String?) -> Void
+  ) {
+    let p = proxy { completion(false, "XPC disconnected") }
+    p?.applyPreset(raw, reply: completion)
+  }
+
+  func setLinkedFraction(
+    _ fraction: Double,
+    completion: @escaping @Sendable (Bool, String?) -> Void
+  ) {
+    let p = proxy { completion(false, "XPC disconnected") }
+    p?.setLinkedFraction(fraction, reply: completion)
+  }
+
+  func setFanRPM(
+    _ index: UInt,
+    rpm: Float,
+    completion: @escaping @Sendable (Bool, String?) -> Void
+  ) {
+    let p = proxy { completion(false, "XPC disconnected") }
+    p?.setFanRPM(index, rpm: rpm, reply: completion)
+  }
+
+  func restoreAuto(completion: @escaping @Sendable (Bool, String?) -> Void) {
+    let p = proxy { completion(false, "XPC disconnected") }
+    p?.restoreAuto(reply: completion)
   }
 
   func invalidate() {
+    connection.invalidationHandler = nil
+    connection.interruptionHandler = nil
     connection.invalidate()
   }
 }
 
-/// Talks to the privileged helper over XPC when available.
-@MainActor
-final class FanService: ObservableObject {
+// MARK: - FanService
+
+/// Not MainActor-isolated: XPC replies arrive on private queues.
+/// All `@Published` mutations hop to the main queue explicitly.
+final class FanService: ObservableObject, @unchecked Sendable {
   @Published var fans: [FanSnapshot] = []
   @Published var temperatures: [TemperatureReading] = []
   @Published var linkedEnabled = true
   @Published var linkedFraction: Double = 0.3
   @Published var activePreset: FanPreset = .auto
-  @Published var statusMessage: String = LanguageStore.shared.strings.connecting
+  @Published var statusMessage: String = L10n.current.connecting
   @Published var canWrite = false
   @Published var hardwareSummary: String = ""
   @Published var safetyNotice: String?
@@ -67,16 +101,24 @@ final class FanService: ObservableObject {
   @Published var isInstallingHelper = false
 
   private var xpc: HelperXPCClient?
-  private var pollTask: Task<Void, Never>?
+  private var pollTimer: DispatchSourceTimer?
   private var localController: FanController?
   private let safety = SafetyPolicy()
   private var wakeObserver: NSObjectProtocol?
   private var desiredManual = false
 
-  private var L: L10n { LanguageStore.shared.strings }
+  private var L: L10n { L10n.current }
+
+  private func onMain(_ body: @escaping @Sendable () -> Void) {
+    if Thread.isMainThread {
+      body()
+    } else {
+      DispatchQueue.main.async(execute: body)
+    }
+  }
 
   func start() {
-    statusMessage = L.readingSensors
+    onMain { self.statusMessage = self.L.readingSensors }
     openLocalRead()
     tryConnectHelper()
     refresh()
@@ -85,7 +127,8 @@ final class FanService: ObservableObject {
   }
 
   func stop() {
-    pollTask?.cancel()
+    pollTimer?.cancel()
+    pollTimer = nil
     if let wakeObserver {
       NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
     }
@@ -97,19 +140,17 @@ final class FanService: ObservableObject {
   }
 
   func reloadLocalizedStrings() {
-    if canWrite {
-      statusMessage = L.helperConnected
-    } else {
-      statusMessage = L.monitorMode
+    onMain {
+      self.statusMessage = self.canWrite ? self.L.helperConnected : self.L.monitorMode
+      self.updateHardwareSummary()
     }
-    updateHardwareSummary()
-    enforceSafetyLocally()
   }
 
   private func updateHardwareSummary() {
     guard let c = localController else { return }
     let count = (try? c.fanCount()) ?? fans.count
-    hardwareSummary = L.hardwareSummary(model: SMCConnection.hardwareModel(), fanCount: count)
+    let summary = L.hardwareSummary(model: SMCConnection.hardwareModel(), fanCount: count)
+    onMain { self.hardwareSummary = summary }
   }
 
   private func openLocalRead() {
@@ -117,43 +158,36 @@ final class FanService: ObservableObject {
       localController = FanController(connection: try SMCConnection())
       updateHardwareSummary()
     } catch {
-      statusMessage = "\(L.smcReadFailed): \(error.localizedDescription)"
+      let msg = "\(L.smcReadFailed): \(error.localizedDescription)"
+      onMain { self.statusMessage = msg }
     }
   }
 
   private func tryConnectHelper() {
     xpc?.invalidate()
-    xpc = HelperXPCClient(
-      machServiceName: AirPulseConfig.helperMachService,
-      onConnected: { [weak self] in
-        Task { @MainActor in
-          self?.canWrite = true
-          self?.statusMessage = LanguageStore.shared.strings.helperConnected
-        }
-      },
-      onDisconnected: { [weak self] in
-        Task { @MainActor in
-          self?.canWrite = false
-        }
+    let client = HelperXPCClient(machServiceName: AirPulseConfig.helperMachService)
+    client.setDisconnectHandler { [weak self] in
+      DispatchQueue.main.async {
+        self?.canWrite = false
       }
-    )
+    }
+    xpc = client
 
-    Task { @MainActor in
-      try? await Task.sleep(nanoseconds: 700_000_000)
-      if self.canWrite == false {
-        self.statusMessage = self.L.monitorMode
+    client.ping { [weak self] ok in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        self.canWrite = ok
+        self.statusMessage = ok ? self.L.helperConnected : self.L.monitorMode
       }
+    }
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+      guard let self, !self.canWrite else { return }
+      self.statusMessage = self.L.monitorMode
     }
   }
 
-  private func helper() -> AirPulseHelperProtocol? {
-    guard canWrite else { return nil }
-    return xpc?.proxy()
-  }
-
-  /// One-time install of the LaunchDaemon helper (single password prompt).
   func installHelper() {
-    let L = self.L
     let helperURL = Bundle.main.bundleURL
       .appendingPathComponent("Contents/MacOS/AirPulseHelper")
     var helperPath = helperURL.path
@@ -161,19 +195,20 @@ final class FanService: ObservableObject {
       helperPath = ProductPaths.helperPath
     }
     guard FileManager.default.isExecutableFile(atPath: helperPath) else {
-      statusMessage = L.helperMissingBinary
+      onMain { self.statusMessage = self.L.helperMissingBinary }
       return
     }
 
-    isInstallingHelper = true
-    statusMessage = L.helperInstalling
+    onMain {
+      self.isInstallingHelper = true
+      self.statusMessage = self.L.helperInstalling
+    }
 
     let dst = "/usr/local/libexec/AirPulseHelper"
     let plistPath = "/Library/LaunchDaemons/\(AirPulseConfig.helperLabel).plist"
     let label = AirPulseConfig.helperLabel
     let mach = AirPulseConfig.helperMachService
 
-    // Keep heredoc terminator flush-left in the generated file.
     let script = """
     #!/bin/bash
     set -euo pipefail
@@ -213,22 +248,21 @@ final class FanService: ObservableObject {
     do {
       try script.write(to: tempURL, atomically: true, encoding: .utf8)
       try FileManager.default.setAttributes(
-        [.posixPermissions: 0o755],
-        ofItemAtPath: tempURL.path
-      )
+        [.posixPermissions: 0o755], ofItemAtPath: tempURL.path)
     } catch {
-      isInstallingHelper = false
-      statusMessage = error.localizedDescription
+      onMain {
+        self.isInstallingHelper = false
+        self.statusMessage = error.localizedDescription
+      }
       return
     }
 
     let scriptPath = tempURL.path
-
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       let proc = Process()
       proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-      // Quote path for AppleScript string.
-      let quoted = scriptPath.replacingOccurrences(of: "\\", with: "\\\\")
+      let quoted = scriptPath
+        .replacingOccurrences(of: "\\", with: "\\\\")
         .replacingOccurrences(of: "\"", with: "\\\"")
       proc.arguments = [
         "-e",
@@ -238,43 +272,55 @@ final class FanService: ObservableObject {
         try proc.run()
         proc.waitUntilExit()
         let ok = proc.terminationStatus == 0
+        try? FileManager.default.removeItem(at: tempURL)
         DispatchQueue.main.async {
           guard let self else { return }
           self.isInstallingHelper = false
-          try? FileManager.default.removeItem(at: tempURL)
           if ok {
-            Task { @MainActor in
-              try? await Task.sleep(nanoseconds: 1_000_000_000)
-              self.tryConnectHelper()
-              try? await Task.sleep(nanoseconds: 1_000_000_000)
+            // Helper may already be installed from a previous attempt.
+            self.tryConnectHelper()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
               let success = self.canWrite
               self.statusMessage =
                 success ? self.L.helperConnected : self.L.helperInstallFailed
-              self.showInstallResultAlert(success: success)
+              Task { @MainActor in
+                self.showInstallResultAlert(success: success)
+              }
             }
           } else {
-            self.statusMessage = self.L.helperInstallFailed
-            self.showInstallResultAlert(success: false)
+            // Install may have succeeded earlier even if this run was cancelled.
+            self.tryConnectHelper()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+              if self.canWrite {
+                self.statusMessage = self.L.helperConnected
+                Task { @MainActor in
+                  self.showInstallResultAlert(success: true)
+                }
+              } else {
+                self.statusMessage = self.L.helperInstallFailed
+                Task { @MainActor in
+                  self.showInstallResultAlert(success: false)
+                }
+              }
+            }
           }
         }
       } catch {
+        try? FileManager.default.removeItem(at: tempURL)
         DispatchQueue.main.async {
           self?.isInstallingHelper = false
           self?.statusMessage = error.localizedDescription
-          try? FileManager.default.removeItem(at: tempURL)
         }
       }
     }
   }
 
+  @MainActor
   private func showInstallResultAlert(success: Bool) {
     let L = self.L
     let alert = NSAlert()
     alert.messageText = success ? L.helperConnected : L.helperInstallFailed
-    alert.informativeText =
-      success
-      ? L.enableFanControlHint
-      : L.needHelperToWrite
+    alert.informativeText = success ? L.enableFanControlHint : L.needHelperToWrite
     alert.alertStyle = success ? .informational : .warning
     alert.addButton(withTitle: "OK")
     NSApp.activate(ignoringOtherApps: true)
@@ -283,110 +329,121 @@ final class FanService: ObservableObject {
 
   func refresh() {
     if let c = localController {
-      fans = (try? c.allFans()) ?? fans
-      temperatures = c.readTemperatures(primaryOnly: true)
-      updateHardwareSummary()
-      if unlinkRPM.isEmpty {
-        for fan in fans {
-          let span = max(1, fan.maxRPM - fan.minRPM)
-          unlinkRPM[fan.index] = Double((fan.actualRPM - fan.minRPM) / span)
+      let newFans = (try? c.allFans()) ?? []
+      let temps = c.readTemperatures(primaryOnly: true)
+      let count = (try? c.fanCount()) ?? newFans.count
+      let summary = L.hardwareSummary(
+        model: SMCConnection.hardwareModel(), fanCount: count)
+
+      onMain {
+        if !newFans.isEmpty { self.fans = newFans }
+        self.temperatures = temps
+        self.hardwareSummary = summary
+        if self.unlinkRPM.isEmpty {
+          for fan in newFans {
+            let span = max(1, fan.maxRPM - fan.minRPM)
+            self.unlinkRPM[fan.index] = Double((fan.actualRPM - fan.minRPM) / span)
+          }
         }
+        if self.activePreset != .auto, let first = newFans.first, first.maxRPM > first.minRPM {
+          self.linkedFraction = Double(
+            (first.targetRPM - first.minRPM) / (first.maxRPM - first.minRPM))
+        }
+        self.enforceSafetyLocally()
       }
-      if activePreset != .auto, let first = fans.first, first.maxRPM > first.minRPM {
-        linkedFraction = Double((first.targetRPM - first.minRPM) / (first.maxRPM - first.minRPM))
-      }
-      enforceSafetyLocally()
     }
 
-    helper()?.listFans { [weak self] data, _ in
-      guard let data else { return }
-      let decoded = data.compactMap { AirPulseCoding.decode(FanSnapshot.self, from: $0) }
-      Task { @MainActor in
-        if !decoded.isEmpty { self?.fans = decoded }
+    // XPC path — decode on XPC queue inside HelperXPCClient, then hop to main.
+    xpc?.listFans { [weak self] remoteFans in
+      guard !remoteFans.isEmpty else { return }
+      DispatchQueue.main.async {
+        self?.fans = remoteFans
       }
     }
   }
 
   private func requireWriteAccess() -> Bool {
     if canWrite { return true }
-    statusMessage = L.needHelperToWrite
+    onMain { self.statusMessage = self.L.needHelperToWrite }
     return false
   }
 
   func applyPreset(_ preset: FanPreset) {
-    activePreset = preset
-    desiredManual = preset != .auto
-    if let fraction = preset.speedFraction {
-      linkedFraction = fraction
+    onMain {
+      self.activePreset = preset
+      self.desiredManual = preset != .auto
+      if let fraction = preset.speedFraction {
+        self.linkedFraction = fraction
+      }
     }
-    guard requireWriteAccess(), let helper = helper() else { return }
-
-    helper.applyPreset(preset.rawValue) { [weak self] ok, err in
-      Task { @MainActor in
+    guard requireWriteAccess() else { return }
+    xpc?.applyPreset(preset.rawValue) { [weak self] ok, err in
+      DispatchQueue.main.async {
         guard let self else { return }
-        let L = self.L
-        self.statusMessage = ok ? L.presetStatus(preset) : (err ?? L.failed)
+        self.statusMessage = ok ? self.L.presetStatus(preset) : (err ?? self.L.failed)
         self.refresh()
       }
     }
   }
 
   func applyLinkedFraction(_ fraction: Double) {
-    linkedFraction = fraction
-    activePreset = .balanced
-    desiredManual = true
-    guard requireWriteAccess(), let helper = helper() else { return }
-
-    helper.setLinkedFraction(fraction) { [weak self] ok, err in
-      Task { @MainActor in
+    onMain {
+      self.linkedFraction = fraction
+      self.activePreset = .balanced
+      self.desiredManual = true
+    }
+    guard requireWriteAccess() else { return }
+    xpc?.setLinkedFraction(fraction) { [weak self] ok, err in
+      DispatchQueue.main.async {
         guard let self else { return }
-        let L = self.L
-        self.statusMessage = ok ? L.linkedStatus(Int(fraction * 100)) : (err ?? L.failed)
+        self.statusMessage = ok ? self.L.linkedStatus(Int(fraction * 100)) : (err ?? self.L.failed)
         self.refresh()
       }
     }
   }
 
   func applyUnlinked(fanIndex: Int, fraction: Double) {
-    unlinkRPM[fanIndex] = fraction
-    desiredManual = true
+    onMain {
+      self.unlinkRPM[fanIndex] = fraction
+      self.desiredManual = true
+    }
     guard let fan = fans.first(where: { $0.index == fanIndex }) else { return }
     let rpm = fan.minRPM + Float(fraction) * (fan.maxRPM - fan.minRPM)
-    guard requireWriteAccess(), let helper = helper() else { return }
-
-    helper.setFanRPM(UInt(fanIndex), rpm: rpm) { [weak self] ok, err in
-      Task { @MainActor in
+    guard requireWriteAccess() else { return }
+    xpc?.setFanRPM(UInt(fanIndex), rpm: rpm) { [weak self] ok, err in
+      DispatchQueue.main.async {
         guard let self else { return }
-        let L = self.L
-        self.statusMessage = ok ? L.fanRPMStatus(fanIndex, rpm: Int(rpm)) : (err ?? L.failed)
+        self.statusMessage =
+          ok ? self.L.fanRPMStatus(fanIndex, rpm: Int(rpm)) : (err ?? self.L.failed)
         self.refresh()
       }
     }
   }
 
   func restoreAuto() {
-    activePreset = .auto
-    desiredManual = false
-    guard requireWriteAccess(), let helper = helper() else { return }
-
-    helper.restoreAuto { [weak self] ok, err in
-      Task { @MainActor in
+    onMain {
+      self.activePreset = .auto
+      self.desiredManual = false
+    }
+    guard requireWriteAccess() else { return }
+    xpc?.restoreAuto { [weak self] ok, err in
+      DispatchQueue.main.async {
         guard let self else { return }
-        let L = self.L
-        self.statusMessage = ok ? L.restoredAuto : (err ?? L.failed)
+        self.statusMessage = ok ? self.L.restoredAuto : (err ?? self.L.failed)
         self.refresh()
       }
     }
   }
 
   private func startPolling() {
-    pollTask?.cancel()
-    pollTask = Task { [weak self] in
-      while !Task.isCancelled {
-        await MainActor.run { self?.refresh() }
-        try? await Task.sleep(nanoseconds: UInt64(AirPulseConfig.pollInterval * 1_000_000_000))
-      }
+    pollTimer?.cancel()
+    let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+    timer.schedule(deadline: .now() + 1, repeating: AirPulseConfig.pollInterval)
+    timer.setEventHandler { [weak self] in
+      self?.refresh()
     }
+    timer.resume()
+    pollTimer = timer
   }
 
   private func observeWake() {
@@ -395,22 +452,20 @@ final class FanService: ObservableObject {
       object: nil,
       queue: .main
     ) { [weak self] _ in
-      Task { @MainActor in
-        guard let self, self.desiredManual, self.canWrite else { return }
-        self.statusMessage = self.L.reassertAfterWake
-        if self.linkedEnabled {
-          self.applyLinkedFraction(self.linkedFraction)
-        } else {
-          for (index, fraction) in self.unlinkRPM {
-            self.applyUnlinked(fanIndex: index, fraction: fraction)
-          }
+      guard let self, self.desiredManual, self.canWrite else { return }
+      self.statusMessage = self.L.reassertAfterWake
+      if self.linkedEnabled {
+        self.applyLinkedFraction(self.linkedFraction)
+      } else {
+        for (index, fraction) in self.unlinkRPM {
+          self.applyUnlinked(fanIndex: index, fraction: fraction)
         }
       }
     }
   }
 
   private func enforceSafetyLocally() {
-    let L = self.L
+    // Caller must be on main.
     let maxTemp = temperatures.map(\.celsius).max()
     switch safety.evaluate(maxTemp: maxTemp) {
     case .restoreAuto:

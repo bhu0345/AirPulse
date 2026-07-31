@@ -24,6 +24,7 @@ final class LanguageStore: ObservableObject {
   @Published var language: AppLanguage {
     didSet {
       UserDefaults.standard.set(language.rawValue, forKey: Self.defaultsKey)
+      L10n.cachedLanguage = language
     }
   }
 
@@ -37,11 +38,17 @@ final class LanguageStore: ObservableObject {
     } else {
       language = .english
     }
+    L10n.cachedLanguage = language
   }
 }
 
 struct L10n {
   let language: AppLanguage
+
+  /// Thread-safe snapshot for background / XPC-adjacent code.
+  nonisolated(unsafe) static var cachedLanguage: AppLanguage = .english
+
+  nonisolated static var current: L10n { L10n(language: cachedLanguage) }
 
   private func t(_ en: String, _ zh: String) -> String {
     language == .chinese ? zh : en
