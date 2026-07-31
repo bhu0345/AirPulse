@@ -19,15 +19,27 @@ A native macOS menu-bar fan controller for MacBook Pro. **Fans on both sides are
 ├── README.md / README.zh-CN.md
 ├── Package.swift
 ├── Sources/               # App / CLI / Helper / SMC
-├── Scripts/               # Build & helper install
+├── Scripts/               # Build, helper install, DMG package
 ├── docs/
 ├── Resources/
-└── Release/AirPulse.app   # Prebuilt app (+ CLI + Helper)
+├── Release/AirPulse.app   # Prebuilt app (+ CLI + Helper)
+└── dist/                  # AirPulse-*.dmg (gitignored; see Releases)
 ```
+
+## Download
+
+Get the latest macOS disk image from **[Releases](https://github.com/bhu0345/AirPulse/releases)**:
+
+1. Download `AirPulse-x.y.z.dmg`
+2. Open the DMG and drag **AirPulse** into **Applications**
+3. Launch AirPulse from Applications (menu-bar fan icon)
+4. Tap **Enable Fan Control** once (admin password) to install the helper
+
+> First launch of an unsigned build: right-click → **Open**, or allow it under **System Settings → Privacy & Security**.
 
 ## Quick start
 
-### Run the prebuilt app
+### Run from this repo
 
 ```bash
 open ./Release/AirPulse.app
@@ -38,6 +50,7 @@ open ./Release/AirPulse.app
 ```bash
 chmod +x Scripts/*.sh
 ./Scripts/build-app.sh   # writes Products/ and syncs Release/
+./Scripts/package-dmg.sh # optional: dist/AirPulse-0.1.0.dmg
 
 ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe
 sudo ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe --write

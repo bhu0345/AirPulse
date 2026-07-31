@@ -22,12 +22,24 @@
 ├── Scripts/
 ├── docs/
 ├── Resources/
-└── Release/AirPulse.app
+├── Release/AirPulse.app
+└── dist/                  # AirPulse-*.dmg（已 gitignore；见 Releases）
 ```
+
+## 下载
+
+从 **[Releases](https://github.com/bhu0345/AirPulse/releases)** 获取最新 macOS 磁盘镜像：
+
+1. 下载 `AirPulse-x.y.z.dmg`
+2. 打开 DMG，将 **AirPulse** 拖到 **应用程序**
+3. 从应用程序启动（菜单栏风扇图标）
+4. 首次点击 **启用风扇控制**（输入一次管理员密码）安装助手
+
+> 未签名构建首次打开：右键 → **打开**，或在 **系统设置 → 隐私与安全性** 中允许。
 
 ## 快速开始
 
-### 直接运行预构建 App
+### 直接运行仓库内预构建 App
 
 ```bash
 open ./Release/AirPulse.app
@@ -38,6 +50,7 @@ open ./Release/AirPulse.app
 ```bash
 chmod +x Scripts/*.sh
 ./Scripts/build-app.sh
+./Scripts/package-dmg.sh   # 可选：生成 dist/AirPulse-0.1.0.dmg
 
 ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe
 sudo ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe --write
