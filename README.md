@@ -1,8 +1,6 @@
 # AirPulse
 
-A native macOS menu-bar fan controller for MacBook Pro. **Both fans stay linked by default**, with one-tap presets — a clearer alternative to Macs Fan Control’s dual-pane “Custom per fan” workflow.
-
-UX critique of Macs Fan Control: [docs/ux-critique.md](docs/ux-critique.md). Setup notes: [docs/prerequisites.md](docs/prerequisites.md).
+A native macOS menu-bar fan controller for MacBook Pro. **Both fans stay linked by default**, with one-tap presets.
 
 > 中文说明见 [README.zh-CN.md](README.zh-CN.md)。
 
@@ -51,7 +49,7 @@ Optional privileged helper (avoids repeated admin prompts):
 sudo ./Scripts/install-helper.sh
 ```
 
-Quit **Macs Fan Control** while developing so the two apps do not fight over SMC writes.
+Avoid running another fan-control app at the same time — they will conflict on SMC writes.
 
 ## Architecture
 

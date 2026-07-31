@@ -1,8 +1,6 @@
 # AirPulse
 
-面向 MacBook Pro 的原生菜单栏风扇控制器：默认**左右风扇联动**、一键预设，替代 Macs Fan Control 的双表 + 分别 Custom 体验。
-
-详解不足与对策见 [docs/ux-critique.md](docs/ux-critique.md)。环境前置见 [docs/prerequisites.md](docs/prerequisites.md)。
+面向 MacBook Pro 的原生菜单栏风扇控制器：默认**左右风扇联动**、一键预设。
 
 > English README: [README.md](README.md)
 
@@ -51,7 +49,7 @@ sudo ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe --write
 sudo ./Scripts/install-helper.sh
 ```
 
-开发期请先退出 **Macs Fan Control**，避免抢控。
+请勿同时运行其他风扇控制软件，以免抢写 SMC。
 
 ## 注意
 
