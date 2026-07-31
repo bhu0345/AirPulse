@@ -347,12 +347,8 @@ final class FanService: ObservableObject, @unchecked Sendable {
             self.unlinkRPM[fan.index] = Double((fan.actualRPM - fan.minRPM) / span)
           }
         }
-        if !self.isDraggingSlider, self.activePreset != .auto,
-          let first = newFans.first, first.maxRPM > first.minRPM
-        {
-          self.linkedFraction = Double(
-            (first.targetRPM - first.minRPM) / (first.maxRPM - first.minRPM))
-        }
+        // Keep the user's slider position as source of truth in manual mode;
+        // never yank it back from hardware while dragging or after a write.
         self.enforceSafetyLocally()
       }
     }
