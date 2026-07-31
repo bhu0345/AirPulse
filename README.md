@@ -1,12 +1,12 @@
 # AirPulse
 
-A native macOS menu-bar fan controller for MacBook Pro. **Both fans stay linked by default**, with one-tap presets.
+A native macOS menu-bar fan controller for MacBook Pro. **Fans on both sides are controlled together by default**, with one-tap presets.
 
 > 中文说明见 [README.zh-CN.md](README.zh-CN.md)。
 
 ## Features
 
-- Menu-bar popover: key temperatures, linked master slider, Auto / Quiet / Balanced / Cool
+- Menu-bar popover: key temperatures, master slider for fans on both sides, Auto / Quiet / Balanced / Cool
 - Optional unlink for independent left/right control
 - **English by default**, with in-app language switch (English / 中文)
 - Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)

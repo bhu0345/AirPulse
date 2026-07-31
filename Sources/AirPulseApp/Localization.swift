@@ -51,7 +51,7 @@ struct L10n {
   var writable: String { t("Writable", "可写入") }
   var readOnlyNeedAuth: String { t("Read-only / needs authorization", "只读 / 需授权") }
   var readingTemps: String { t("Reading temperatures…", "温度读取中…") }
-  var fansLinked: String { t("Link both fans", "左右风扇联动") }
+  var fansLinked: String { t("Fans on both sides", "左右风扇联动") }
   var fansUnlinked: String { t("Independent control", "已解除联动") }
   var unlinkHelp: String {
     t("Turn off to control left and right fans separately", "关闭后可分别调节左右风扇")
