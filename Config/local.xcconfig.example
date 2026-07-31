@@ -1,0 +1,5 @@
+// Copy to Config/local.xcconfig after installing Xcode + signing identity.
+CODE_SIGN_IDENTITY = Apple Development
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+PRODUCT_BUNDLE_IDENTIFIER = com.bingtaohu.AirPulse
+HELPER_BUNDLE_IDENTIFIER = com.bingtaohu.AirPulse.helper

@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+Products/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+Config/local.xcconfig
+.swiftpm/
+*.log
+docs/spike-results.local.md
