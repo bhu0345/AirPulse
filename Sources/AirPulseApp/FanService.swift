@@ -4,8 +4,54 @@ import FanKit
 import Foundation
 import SMCKit
 
+/// Holds the XPC connection and forwards callbacks onto the main actor safely.
+/// XPC queues are not MainActor — calling @MainActor FanService directly from
+/// those queues crashes with EXC_BREAKPOINT (dispatch_assert_queue_fail).
+final class HelperXPCClient: @unchecked Sendable {
+  private let connection: NSXPCConnection
+  private let onConnected: @Sendable () -> Void
+  private let onDisconnected: @Sendable () -> Void
+
+  init(
+    machServiceName: String,
+    onConnected: @escaping @Sendable () -> Void,
+    onDisconnected: @escaping @Sendable () -> Void
+  ) {
+    self.onConnected = onConnected
+    self.onDisconnected = onDisconnected
+    let conn = NSXPCConnection(machServiceName: machServiceName, options: [.privileged])
+    conn.remoteObjectInterface = NSXPCInterface(with: AirPulseHelperProtocol.self)
+    self.connection = conn
+
+    conn.invalidationHandler = { [onDisconnected] in
+      onDisconnected()
+    }
+    conn.interruptionHandler = { [onDisconnected] in
+      onDisconnected()
+    }
+    conn.resume()
+
+    let proxy = conn.remoteObjectProxyWithErrorHandler { [onDisconnected] _ in
+      onDisconnected()
+    } as? AirPulseHelperProtocol
+
+    proxy?.ping { [onConnected] _ in
+      onConnected()
+    }
+  }
+
+  func proxy() -> AirPulseHelperProtocol? {
+    connection.remoteObjectProxyWithErrorHandler { [onDisconnected] _ in
+      onDisconnected()
+    } as? AirPulseHelperProtocol
+  }
+
+  func invalidate() {
+    connection.invalidate()
+  }
+}
+
 /// Talks to the privileged helper over XPC when available.
-/// Writes require the installed helper — no per-action osascript password prompts.
 @MainActor
 final class FanService: ObservableObject {
   @Published var fans: [FanSnapshot] = []
@@ -20,7 +66,7 @@ final class FanService: ObservableObject {
   @Published var unlinkRPM: [Int: Double] = [:]
   @Published var isInstallingHelper = false
 
-  private var connection: NSXPCConnection?
+  private var xpc: HelperXPCClient?
   private var pollTask: Task<Void, Never>?
   private var localController: FanController?
   private let safety = SafetyPolicy()
@@ -46,11 +92,11 @@ final class FanService: ObservableObject {
     if desiredManual {
       restoreAuto()
     }
-    connection?.invalidate()
+    xpc?.invalidate()
+    xpc = nil
   }
 
   func reloadLocalizedStrings() {
-    let L = self.L
     if canWrite {
       statusMessage = L.helperConnected
     } else {
@@ -76,41 +122,24 @@ final class FanService: ObservableObject {
   }
 
   private func tryConnectHelper() {
-    connection?.invalidate()
-    let conn = NSXPCConnection(
+    xpc?.invalidate()
+    xpc = HelperXPCClient(
       machServiceName: AirPulseConfig.helperMachService,
-      options: [.privileged]
+      onConnected: { [weak self] in
+        Task { @MainActor in
+          self?.canWrite = true
+          self?.statusMessage = LanguageStore.shared.strings.helperConnected
+        }
+      },
+      onDisconnected: { [weak self] in
+        Task { @MainActor in
+          self?.canWrite = false
+        }
+      }
     )
-    conn.remoteObjectInterface = NSXPCInterface(with: AirPulseHelperProtocol.self)
-    conn.invalidationHandler = { [weak self] in
-      Task { @MainActor in
-        self?.canWrite = false
-        self?.connection = nil
-      }
-    }
-    conn.interruptionHandler = { [weak self] in
-      Task { @MainActor in
-        self?.canWrite = false
-      }
-    }
-    conn.resume()
-    connection = conn
-
-    let proxy = conn.remoteObjectProxyWithErrorHandler { [weak self] _ in
-      Task { @MainActor in
-        self?.canWrite = false
-      }
-    } as? AirPulseHelperProtocol
-
-    proxy?.ping { [weak self] _ in
-      Task { @MainActor in
-        self?.canWrite = true
-        self?.statusMessage = LanguageStore.shared.strings.helperConnected
-      }
-    }
 
     Task { @MainActor in
-      try? await Task.sleep(nanoseconds: 600_000_000)
+      try? await Task.sleep(nanoseconds: 700_000_000)
       if self.canWrite == false {
         self.statusMessage = self.L.monitorMode
       }
@@ -118,8 +147,8 @@ final class FanService: ObservableObject {
   }
 
   private func helper() -> AirPulseHelperProtocol? {
-    guard canWrite, let connection else { return nil }
-    return connection.remoteObjectProxy as? AirPulseHelperProtocol
+    guard canWrite else { return nil }
+    return xpc?.proxy()
   }
 
   /// One-time install of the LaunchDaemon helper (single password prompt).
@@ -144,6 +173,7 @@ final class FanService: ObservableObject {
     let label = AirPulseConfig.helperLabel
     let mach = AirPulseConfig.helperMachService
 
+    // Keep heredoc terminator flush-left in the generated file.
     let script = """
     #!/bin/bash
     set -euo pipefail
@@ -193,13 +223,17 @@ final class FanService: ObservableObject {
     }
 
     let scriptPath = tempURL.path
-    let appleScript =
-      "do shell script \"/bin/bash \(scriptPath.replacingOccurrences(of: "\"", with: "\\\""))\" with administrator privileges"
 
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       let proc = Process()
       proc.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-      proc.arguments = ["-e", appleScript]
+      // Quote path for AppleScript string.
+      let quoted = scriptPath.replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+      proc.arguments = [
+        "-e",
+        "do shell script \"/bin/bash \\\"\(quoted)\\\"\" with administrator privileges",
+      ]
       do {
         try proc.run()
         proc.waitUntilExit()
@@ -210,17 +244,17 @@ final class FanService: ObservableObject {
           try? FileManager.default.removeItem(at: tempURL)
           if ok {
             Task { @MainActor in
-              try? await Task.sleep(nanoseconds: 800_000_000)
+              try? await Task.sleep(nanoseconds: 1_000_000_000)
               self.tryConnectHelper()
-              try? await Task.sleep(nanoseconds: 800_000_000)
-              if self.canWrite {
-                self.statusMessage = self.L.helperConnected
-              } else {
-                self.statusMessage = self.L.helperInstallFailed
-              }
+              try? await Task.sleep(nanoseconds: 1_000_000_000)
+              let success = self.canWrite
+              self.statusMessage =
+                success ? self.L.helperConnected : self.L.helperInstallFailed
+              self.showInstallResultAlert(success: success)
             }
           } else {
             self.statusMessage = self.L.helperInstallFailed
+            self.showInstallResultAlert(success: false)
           }
         }
       } catch {
@@ -231,6 +265,20 @@ final class FanService: ObservableObject {
         }
       }
     }
+  }
+
+  private func showInstallResultAlert(success: Bool) {
+    let L = self.L
+    let alert = NSAlert()
+    alert.messageText = success ? L.helperConnected : L.helperInstallFailed
+    alert.informativeText =
+      success
+      ? L.enableFanControlHint
+      : L.needHelperToWrite
+    alert.alertStyle = success ? .informational : .warning
+    alert.addButton(withTitle: "OK")
+    NSApp.activate(ignoringOtherApps: true)
+    alert.runModal()
   }
 
   func refresh() {

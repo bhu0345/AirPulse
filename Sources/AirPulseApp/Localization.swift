@@ -66,8 +66,8 @@ struct L10n {
   var enableFanControl: String { t("Enable Fan Control", "启用风扇控制") }
   var enableFanControlHint: String {
     t(
-      "One-time password to install a system helper — then no more prompts.",
-      "只需输入一次密码安装系统助手，之后不再弹窗。"
+      "One-time password to install a system helper — then no more prompts. If the menu closes, click the fan icon in the menu bar again.",
+      "只需输入一次密码安装系统助手，之后不再弹窗。若菜单关闭，请再次点击菜单栏风扇图标。"
     )
   }
   var helperInstalling: String { t("Installing helper…", "正在安装助手…") }
