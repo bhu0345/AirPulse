@@ -1,30 +1,26 @@
-# AirPulse
+# AirPulse — Mac Fan Control for MacBook Pro
 
-A native macOS menu-bar fan controller for MacBook Pro. **Fans on both sides are controlled together by default**, with one-tap presets.
+**AirPulse** is a free, open-source **Mac fan control** app for macOS. It sits in the menu bar and lets you monitor temperatures and manually set MacBook / MacBook Pro fan speeds on **Apple Silicon** (including M-series chips).
 
+**Fans on both sides are controlled together by default**, with one-tap presets (Auto / Quiet / Balanced / Cool). Optional unlink for independent left/right control.
+
+> Looking for a lightweight **macOS fan controller** or an alternative way to manage MacBook fan RPM via SMC? Download the DMG below or build from source.  
 > 中文说明见 [README.zh-CN.md](README.zh-CN.md)。
+
+## Why AirPulse
+
+- Native SwiftUI **menu-bar Mac fan control** — no Electron, no cluttered dashboard
+- Linked dual-fan slider + presets for everyday **MacBook Pro fan** noise/cooling tradeoffs
+- Reads CPU / GPU / battery temps from Apple **SMC**; writes fan targets through a one-time privileged helper
+- English UI by default, with in-app **English / 中文**
+- Restore system Auto on quit; overheat safety; re-assert after sleep/wake
 
 ## Features
 
 - Menu-bar popover: key temperatures, master slider for fans on both sides, Auto / Quiet / Balanced / Cool
 - Optional unlink for independent left/right control
-- **English by default**, with in-app language switch (English / 中文)
 - Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)
-- Restore system Auto on quit; overheat safety; re-assert after sleep/wake
 - CLI probe: `airpulse-cli probe [--write]`
-
-## Repository layout
-
-```text
-├── README.md / README.zh-CN.md
-├── Package.swift
-├── Sources/               # App / CLI / Helper / SMC
-├── Scripts/               # Build, helper install, DMG package
-├── docs/
-├── Resources/
-├── Release/AirPulse.app   # Prebuilt app (+ CLI + Helper)
-└── dist/                  # AirPulse-*.dmg (gitignored; see Releases)
-```
 
 ## Download
 
@@ -62,7 +58,20 @@ Optional privileged helper (avoids repeated admin prompts):
 sudo ./Scripts/install-helper.sh
 ```
 
-Avoid running another fan-control app at the same time — they will conflict on SMC writes.
+Avoid running another Mac fan control / SMC fan app at the same time — they will conflict on SMC writes.
+
+## Repository layout
+
+```text
+├── README.md / README.zh-CN.md
+├── Package.swift
+├── Sources/               # App / CLI / Helper / SMC
+├── Scripts/               # Build, helper install, DMG package
+├── docs/
+├── Resources/
+├── Release/AirPulse.app   # Prebuilt app (+ CLI + Helper)
+└── dist/                  # AirPulse-*.dmg (gitignored; see Releases)
+```
 
 ## Architecture
 
@@ -72,6 +81,10 @@ AirPulse.app (SwiftUI MenuBarExtra)
     └─ writes: XPC → AirPulseHelper (LaunchDaemon)
               or osascript + airpulse-cli (if helper is not installed)
 ```
+
+## Keywords / topics
+
+`mac fan control` · `macbook fan control` · `macbook pro fan` · `macos fan controller` · `apple silicon fan` · `smc fan control` · `menu bar fan app`
 
 ## Caution
 

@@ -1,30 +1,26 @@
-# AirPulse
+# AirPulse — Mac 风扇控制 / MacBook Pro Fan Control
 
-面向 MacBook Pro 的原生菜单栏风扇控制器：默认**左右风扇联动**、一键预设。
+**AirPulse** 是开源的 **Mac 风扇控制**（Mac fan control）应用：菜单栏监控温度，并在 **Apple Silicon**（M 系列）MacBook / MacBook Pro 上手动调节风扇转速。
 
+默认**左右风扇联动**，一键预设（自动 / 安静 / 均衡 / 强冷）；也可解除联动分别控制。
+
+> 寻找轻量的 **macOS 风扇控制器**、或基于 SMC 调节 MacBook 风扇 RPM 的方案？请下载下方 DMG 或自行编译。  
 > English README: [README.md](README.md)
+
+## 为什么选 AirPulse
+
+- 原生 SwiftUI **菜单栏 Mac 风扇控制**，界面简洁
+- 联动主滑杆 + 预设，兼顾 MacBook Pro 噪音与散热
+- 从 Apple **SMC** 读取 CPU / GPU / 电池温度；写转速需一次特权 Helper
+- 默认英语界面，应用内可切换 **English / 中文**
+- 退出恢复系统 Auto；过热保护；睡眠唤醒后重申手动设定
 
 ## 功能
 
 - 菜单栏 popover：关键温度、联动主滑杆、自动 / 安静 / 均衡 / 强冷
 - 可解除联动，分别控制左右风扇
-- **默认英语界面**，应用内可切换 English / 中文
-- Apple Silicon SMC（探测 `F%dmd` / `F%dMd`，可选 `Ftst`）
-- 退出恢复系统 Auto；过热保护；睡眠唤醒后重申手动设定
+- Apple Silicon SMC（`F%dmd` / `F%dMd`，可选 `Ftst`）
 - CLI 探针：`airpulse-cli probe [--write]`
-
-## 仓库结构
-
-```text
-├── README.md / README.zh-CN.md
-├── Package.swift
-├── Sources/
-├── Scripts/
-├── docs/
-├── Resources/
-├── Release/AirPulse.app
-└── dist/                  # AirPulse-*.dmg（已 gitignore；见 Releases）
-```
 
 ## 下载
 
@@ -62,7 +58,24 @@ sudo ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe --write
 sudo ./Scripts/install-helper.sh
 ```
 
-请勿同时运行其他风扇控制软件，以免抢写 SMC。
+请勿同时运行其他 Mac 风扇控制 / SMC 风扇软件，以免抢写 SMC。
+
+## 仓库结构
+
+```text
+├── README.md / README.zh-CN.md
+├── Package.swift
+├── Sources/
+├── Scripts/
+├── docs/
+├── Resources/
+├── Release/AirPulse.app
+└── dist/                  # AirPulse-*.dmg（已 gitignore；见 Releases）
+```
+
+## 关键词
+
+`mac风扇控制` · `macbook风扇` · `mac fan control` · `macbook fan control` · `macos风扇控制` · `苹果硅风扇` · `SMC风扇`
 
 ## 注意
 
