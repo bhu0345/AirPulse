@@ -21,6 +21,10 @@ cp "$BIN/AirPulse" "$MACOS/AirPulse"
 cp "$BIN/airpulse-cli" "$MACOS/airpulse-cli"
 cp "$BIN/AirPulseHelper" "$MACOS/AirPulseHelper"
 
+if [[ -f "$ROOT/Resources/AppIcon.icns" ]]; then
+  cp "$ROOT/Resources/AppIcon.icns" "$RES/AppIcon.icns"
+fi
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -32,12 +36,14 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <string>com.bingtaohu.AirPulse</string>
   <key>CFBundleName</key>
   <string>AirPulse</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>0.1.1</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>2</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

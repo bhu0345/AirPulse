@@ -1,5 +1,9 @@
 # AirPulse — Mac 风扇控制 / MacBook Pro Fan Control
 
+<p align="center">
+  <img src="Resources/AppIcon-256.png" width="128" height="128" alt="AirPulse 图标" />
+</p>
+
 **AirPulse** 是开源的 **Mac 风扇控制**（Mac fan control）应用：菜单栏监控温度，并在 **Apple Silicon**（M 系列）MacBook / MacBook Pro 上手动调节风扇转速。
 
 默认**左右风扇联动**，一键预设（自动 / 安静 / 均衡 / 强冷）；也可解除联动分别控制。

@@ -3,7 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>files</key>
-	<dict/>
+	<dict>
+		<key>Resources/AppIcon.icns</key>
+		<data>
+		2cYswdM80rIkvXiwynlkUqpXvN8=
+		</data>
+	</dict>
 	<key>files2</key>
 	<dict>
 		<key>MacOS/AirPulseHelper</key>
@@ -23,6 +28,13 @@
 			</data>
 			<key>requirement</key>
 			<string>cdhash H"4030c8b7f3ef00a6fd0d0c9b24888fec85b8e1e6"</string>
+		</dict>
+		<key>Resources/AppIcon.icns</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			OuCm5zUtrU6O3ZjrV98/7CJefPKV9AEOhTuy72ic/W8=
+			</data>
 		</dict>
 	</dict>
 	<key>rules</key>

@@ -1,5 +1,9 @@
 # AirPulse — Mac Fan Control for MacBook Pro
 
+<p align="center">
+  <img src="Resources/AppIcon-256.png" width="128" height="128" alt="AirPulse icon" />
+</p>
+
 **AirPulse** is a free, open-source **Mac fan control** app for macOS. It sits in the menu bar and lets you monitor temperatures and manually set MacBook / MacBook Pro fan speeds on **Apple Silicon** (including M-series chips).
 
 **Fans on both sides are controlled together by default**, with one-tap presets (Auto / Quiet / Balanced / Cool). Optional unlink for independent left/right control.
