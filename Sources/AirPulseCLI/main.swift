@@ -22,19 +22,19 @@ struct AirPulseCLI {
         try runTemps()
       case "set":
         guard args.count >= 3, let rpm = Float(args[2]) else {
-          fputs("用法: airpulse-cli set <fanIndex> <rpm>\n", stderr)
+          fputs("Usage: airpulse-cli set <fanIndex> <rpm>\n", stderr)
           exit(1)
         }
         try runSet(fanIndex: Int(args[1]) ?? 0, rpm: rpm)
       case "linked":
         guard args.count >= 2, let fraction = Double(args[1]) else {
-          fputs("用法: airpulse-cli linked <0.0-1.0>\n", stderr)
+          fputs("Usage: airpulse-cli linked <0.0-1.0>\n", stderr)
           exit(1)
         }
         try runLinked(fraction: fraction)
       case "preset":
         guard args.count >= 2, let preset = FanPreset(rawValue: args[1]) else {
-          fputs("用法: airpulse-cli preset <auto|quiet|balanced|cool>\n", stderr)
+          fputs("Usage: airpulse-cli preset <auto|quiet|balanced|cool>\n", stderr)
           exit(1)
         }
         try runPreset(preset)
@@ -43,12 +43,12 @@ struct AirPulseCLI {
       case "help", "-h", "--help":
         printUsage()
       default:
-        fputs("未知命令: \(command)\n", stderr)
+        fputs("Unknown command: \(command)\n", stderr)
         printUsage()
         exit(1)
       }
     } catch {
-      fputs("错误: \(error.localizedDescription)\n", stderr)
+      fputs("Error: \(error.localizedDescription)\n", stderr)
       exit(2)
     }
   }
@@ -58,13 +58,13 @@ struct AirPulseCLI {
       """
       AirPulse CLI
 
-        airpulse-cli probe [--write]   硬件可行性探针（--write 需要 root）
-        airpulse-cli list              列出风扇
-        airpulse-cli temps             列出关键温度
-        airpulse-cli linked <0-1>      联动设定转速比例（需 root）
-        airpulse-cli preset <name>     应用预设（需 root）
-        airpulse-cli set <i> <rpm>     单风扇目标转速（需 root）
-        airpulse-cli auto              恢复系统自动（需 root）
+        airpulse-cli probe [--write]   Hardware probe (--write requires root)
+        airpulse-cli list              List fans
+        airpulse-cli temps             List key temperatures
+        airpulse-cli linked <0-1>      Set linked speed fraction (requires root)
+        airpulse-cli preset <name>     Apply preset (requires root)
+        airpulse-cli set <i> <rpm>     Set one fan target RPM (requires root)
+        airpulse-cli auto              Restore system Auto (requires root)
       """
     )
   }
@@ -114,7 +114,6 @@ struct AirPulseCLI {
     print("writeTest: \(writeOK ? "pass" : "n/a") — \(writeNote)")
     print("=== end ===")
 
-    // Machine-readable summary for docs
     let summary = """
     model=\(model)
     modeKey=\(c.config.modeKeyFormat)
@@ -178,7 +177,7 @@ struct AirPulseCLI {
 
   static func requireRoot() {
     if geteuid() != 0 {
-      fputs("此操作需要 root：请使用 sudo airpulse-cli ...\n", stderr)
+      fputs("This operation requires root: sudo airpulse-cli ...\n", stderr)
       exit(3)
     }
   }

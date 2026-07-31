@@ -3,7 +3,10 @@ import SwiftUI
 
 struct MenuBarPopoverView: View {
   @ObservedObject var service: FanService
+  @ObservedObject private var languageStore = LanguageStore.shared
   @State private var showAdvanced = false
+
+  private var L: L10n { languageStore.strings }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -17,8 +20,9 @@ struct MenuBarPopoverView: View {
       footer
     }
     .padding(16)
-    .frame(width: 320)
+    .frame(width: 340)
     .background(popoverBackground)
+    .id(languageStore.language)
   }
 
   private var header: some View {
@@ -26,7 +30,7 @@ struct MenuBarPopoverView: View {
       VStack(alignment: .leading, spacing: 2) {
         Text("AirPulse")
           .font(.system(size: 18, weight: .semibold, design: .rounded))
-        Text(service.hardwareSummary.isEmpty ? "Mac 风扇控制" : service.hardwareSummary)
+        Text(service.hardwareSummary.isEmpty ? L.macFanControl : service.hardwareSummary)
           .font(.caption2)
           .foregroundStyle(.secondary)
           .lineLimit(2)
@@ -35,7 +39,7 @@ struct MenuBarPopoverView: View {
       Circle()
         .fill(service.canWrite ? Color.green.opacity(0.85) : Color.orange.opacity(0.85))
         .frame(width: 8, height: 8)
-        .help(service.canWrite ? "可写入" : "只读 / 需授权")
+        .help(service.canWrite ? L.writable : L.readOnlyNeedAuth)
     }
   }
 
@@ -43,7 +47,7 @@ struct MenuBarPopoverView: View {
     HStack(spacing: 10) {
       ForEach(service.temperatures.prefix(3)) { reading in
         VStack(spacing: 2) {
-          Text(reading.name)
+          Text(L.sensorName(reading.name))
             .font(.caption2)
             .foregroundStyle(.secondary)
           Text(String(format: "%.0f°", reading.celsius))
@@ -58,7 +62,7 @@ struct MenuBarPopoverView: View {
         )
       }
       if service.temperatures.isEmpty {
-        Text("温度读取中…")
+        Text(L.readingTemps)
           .font(.caption)
           .foregroundStyle(.secondary)
           .frame(maxWidth: .infinity)
@@ -72,7 +76,7 @@ struct MenuBarPopoverView: View {
         Button {
           service.applyPreset(preset)
         } label: {
-          Text(preset.titleZH)
+          Text(L.presetTitle(preset))
             .font(.system(size: 12, weight: .medium))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
@@ -99,20 +103,23 @@ struct MenuBarPopoverView: View {
   private var linkedSlider: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Text(service.linkedEnabled ? "左右风扇联动" : "已解除联动")
+        Text(service.linkedEnabled ? L.fansLinked : L.fansUnlinked)
           .font(.subheadline.weight(.medium))
         Spacer()
-        Toggle("", isOn: Binding(
-          get: { service.linkedEnabled },
-          set: { newValue in
-            service.linkedEnabled = newValue
-            if !newValue { showAdvanced = true }
-          }
-        ))
-          .labelsHidden()
-          .toggleStyle(.switch)
-          .controlSize(.small)
-          .help("关闭后可分别调节左右风扇")
+        Toggle(
+          "",
+          isOn: Binding(
+            get: { service.linkedEnabled },
+            set: { newValue in
+              service.linkedEnabled = newValue
+              if !newValue { showAdvanced = true }
+            }
+          )
+        )
+        .labelsHidden()
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .help(L.unlinkHelp)
       }
 
       if service.linkedEnabled {
@@ -137,7 +144,7 @@ struct MenuBarPopoverView: View {
 
         HStack {
           ForEach(service.fans) { fan in
-            Text("风扇\(fan.index) \(Int(fan.actualRPM))")
+            Text(L.fanRPM(fan.index, rpm: Int(fan.actualRPM)))
               .font(.caption2)
               .foregroundStyle(.secondary)
             if fan.id != service.fans.last?.id {
@@ -156,14 +163,14 @@ struct MenuBarPopoverView: View {
 
   private var unlinkedSection: some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("分别控制")
+      Text(L.perFanControl)
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       ForEach(service.fans) { fan in
         HStack {
-          Text("风扇 \(fan.index)")
+          Text(L.fanLabel(fan.index))
             .font(.caption)
-            .frame(width: 44, alignment: .leading)
+            .frame(width: 52, alignment: .leading)
           Slider(
             value: Binding(
               get: { service.unlinkRPM[fan.index] ?? 0.3 },
@@ -199,22 +206,38 @@ struct MenuBarPopoverView: View {
         .foregroundStyle(.secondary)
         .lineLimit(2)
 
-      HStack {
-        Button(showAdvanced ? "收起高级" : "高级") {
+      HStack(spacing: 8) {
+        Button(showAdvanced ? L.hideAdvanced : L.advanced) {
           withAnimation(.easeInOut(duration: 0.2)) { showAdvanced.toggle() }
         }
         .buttonStyle(.borderless)
         .font(.caption)
 
+        Picker(L.languageLabel, selection: Binding(
+          get: { languageStore.language },
+          set: { newValue in
+            languageStore.language = newValue
+            service.reloadLocalizedStrings()
+          }
+        )) {
+          ForEach(AppLanguage.allCases) { lang in
+            Text(lang.displayName).tag(lang)
+          }
+        }
+        .labelsHidden()
+        .pickerStyle(.menu)
+        .controlSize(.small)
+        .frame(width: 88)
+
         Spacer()
 
-        Button("恢复自动") {
+        Button(L.restoreAuto) {
           service.restoreAuto()
         }
         .buttonStyle(.borderless)
         .font(.caption)
 
-        Button("退出") {
+        Button(L.quit) {
           service.stop()
           NSApp.terminate(nil)
         }

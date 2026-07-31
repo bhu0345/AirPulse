@@ -13,7 +13,7 @@ final class FanService: ObservableObject {
   @Published var linkedEnabled = true
   @Published var linkedFraction: Double = 0.3
   @Published var activePreset: FanPreset = .auto
-  @Published var statusMessage: String = "正在连接…"
+  @Published var statusMessage: String = LanguageStore.shared.strings.connecting
   @Published var canWrite = false
   @Published var hardwareSummary: String = ""
   @Published var safetyNotice: String?
@@ -26,8 +26,10 @@ final class FanService: ObservableObject {
   private var wakeObserver: NSObjectProtocol?
   private var desiredManual = false
 
+  private var L: L10n { LanguageStore.shared.strings }
+
   func start() {
-    statusMessage = "读取传感器…"
+    statusMessage = L.readingSensors
     openLocalRead()
     tryConnectHelper()
     refresh()
@@ -46,15 +48,31 @@ final class FanService: ObservableObject {
     connection?.invalidate()
   }
 
+  /// Refresh status strings after the user changes language.
+  func reloadLocalizedStrings() {
+    let L = self.L
+    if canWrite {
+      statusMessage = L.helperConnected
+    } else if statusMessage.isEmpty || !statusMessage.contains("SMC") {
+      statusMessage = L.monitorMode
+    }
+    if let c = localController {
+      hardwareSummary =
+        "\(SMCConnection.hardwareModel()) · mode \(c.config.modeKeyFormat) · Ftst \(c.config.ftstAvailable ? L.ftstYes : L.ftstNo)"
+    }
+    enforceSafetyLocally()
+  }
+
   private func openLocalRead() {
+    let L = self.L
     do {
       localController = FanController(connection: try SMCConnection())
       if let c = localController {
         hardwareSummary =
-          "\(SMCConnection.hardwareModel()) · mode \(c.config.modeKeyFormat) · Ftst \(c.config.ftstAvailable ? "有" : "无")"
+          "\(SMCConnection.hardwareModel()) · mode \(c.config.modeKeyFormat) · Ftst \(c.config.ftstAvailable ? L.ftstYes : L.ftstNo)"
       }
     } catch {
-      statusMessage = "SMC 读取失败: \(error.localizedDescription)"
+      statusMessage = "\(L.smcReadFailed): \(error.localizedDescription)"
     }
   }
 
@@ -74,14 +92,13 @@ final class FanService: ObservableObject {
     proxy.ping { [weak self] _ in
       Task { @MainActor in
         self?.canWrite = true
-        self?.statusMessage = "已连接特权 Helper"
+        self?.statusMessage = LanguageStore.shared.strings.helperConnected
       }
     }
-    // If helper isn't installed, ping never returns; mark after timeout.
     Task { @MainActor in
       try? await Task.sleep(nanoseconds: 800_000_000)
       if self.canWrite == false {
-        self.statusMessage = "监视模式（写入需安装 Helper 或使用 sudo CLI）"
+        self.statusMessage = self.L.monitorMode
       }
     }
   }
@@ -125,14 +142,15 @@ final class FanService: ObservableObject {
     if let helper = helper(), canWrite {
       helper.applyPreset(preset.rawValue) { [weak self] ok, err in
         Task { @MainActor in
-          self?.statusMessage = ok ? "预设：\(preset.titleZH)" : (err ?? "失败")
-          self?.refresh()
+          guard let self else { return }
+          let L = self.L
+          self.statusMessage = ok ? L.presetStatus(preset) : (err ?? L.failed)
+          self.refresh()
         }
       }
       return
     }
 
-    // Fallback: spawn privileged CLI via osascript
     runPrivilegedCLI(["preset", preset.rawValue])
   }
 
@@ -144,8 +162,11 @@ final class FanService: ObservableObject {
     if let helper = helper(), canWrite {
       helper.setLinkedFraction(fraction) { [weak self] ok, err in
         Task { @MainActor in
-          self?.statusMessage = ok ? String(format: "联动 %.0f%%", fraction * 100) : (err ?? "失败")
-          self?.refresh()
+          guard let self else { return }
+          let L = self.L
+          self.statusMessage =
+            ok ? L.linkedStatus(Int(fraction * 100)) : (err ?? L.failed)
+          self.refresh()
         }
       }
       return
@@ -161,8 +182,11 @@ final class FanService: ObservableObject {
     if let helper = helper(), canWrite {
       helper.setFanRPM(UInt(fanIndex), rpm: rpm) { [weak self] ok, err in
         Task { @MainActor in
-          self?.statusMessage = ok ? "风扇 \(fanIndex)：\(Int(rpm)) RPM" : (err ?? "失败")
-          self?.refresh()
+          guard let self else { return }
+          let L = self.L
+          self.statusMessage =
+            ok ? L.fanRPMStatus(fanIndex, rpm: Int(rpm)) : (err ?? L.failed)
+          self.refresh()
         }
       }
       return
@@ -176,8 +200,10 @@ final class FanService: ObservableObject {
     if let helper = helper(), canWrite {
       helper.restoreAuto { [weak self] ok, err in
         Task { @MainActor in
-          self?.statusMessage = ok ? "已恢复系统自动" : (err ?? "失败")
-          self?.refresh()
+          guard let self else { return }
+          let L = self.L
+          self.statusMessage = ok ? L.restoredAuto : (err ?? L.failed)
+          self.refresh()
         }
       }
       return
@@ -186,12 +212,13 @@ final class FanService: ObservableObject {
   }
 
   private func runPrivilegedCLI(_ args: [String]) {
+    let L = self.L
     let cli = Bundle.main.bundleURL
       .appendingPathComponent("Contents/MacOS/airpulse-cli").path
     let fallback = ProductPaths.cliPath
     let exe = FileManager.default.isExecutableFile(atPath: cli) ? cli : fallback
     guard FileManager.default.isExecutableFile(atPath: exe) else {
-      statusMessage = "未找到 airpulse-cli，请先 Scripts/build-app.sh"
+      statusMessage = L.cliMissing
       return
     }
     let argString = args.map { "'\($0)'" }.joined(separator: " ")
@@ -203,7 +230,7 @@ final class FanService: ObservableObject {
     do {
       try proc.run()
       proc.waitUntilExit()
-      statusMessage = proc.terminationStatus == 0 ? "已应用（管理员权限）" : "写入失败（权限或 SMC）"
+      statusMessage = proc.terminationStatus == 0 ? L.appliedAdmin : L.writeFailed
       refresh()
     } catch {
       statusMessage = error.localizedDescription
@@ -215,8 +242,6 @@ final class FanService: ObservableObject {
     pollTask = Task { [weak self] in
       while !Task.isCancelled {
         await MainActor.run { self?.refresh() }
-        // Privileged helper re-asserts targets on its own timer.
-        // osascript fallback only re-applies on wake (see observeWake), not every poll.
         try? await Task.sleep(nanoseconds: UInt64(AirPulseConfig.pollInterval * 1_000_000_000))
       }
     }
@@ -230,7 +255,7 @@ final class FanService: ObservableObject {
     ) { [weak self] _ in
       Task { @MainActor in
         guard let self, self.desiredManual else { return }
-        self.statusMessage = "唤醒后重新施加风扇设定…"
+        self.statusMessage = self.L.reassertAfterWake
         if self.linkedEnabled {
           self.applyLinkedFraction(self.linkedFraction)
         } else {
@@ -243,13 +268,14 @@ final class FanService: ObservableObject {
   }
 
   private func enforceSafetyLocally() {
+    let L = self.L
     let maxTemp = temperatures.map(\.celsius).max()
     switch safety.evaluate(maxTemp: maxTemp) {
     case .restoreAuto:
-      safetyNotice = "温度过高，已恢复系统自动控温"
+      safetyNotice = L.safetyCritical
       if desiredManual { restoreAuto() }
     case .forceCool:
-      safetyNotice = "温度偏高，已切换强冷"
+      safetyNotice = L.safetyWarning
       if activePreset != .cool { applyPreset(.cool) }
     case .none:
       safetyNotice = nil
@@ -264,6 +290,7 @@ enum ProductPaths {
       "\(cwd)/.build/release/airpulse-cli",
       "\(cwd)/.build/debug/airpulse-cli",
       "\(cwd)/Products/AirPulse.app/Contents/MacOS/airpulse-cli",
+      "\(cwd)/Release/AirPulse.app/Contents/MacOS/airpulse-cli",
     ]
     return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? candidates[0]
   }

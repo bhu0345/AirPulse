@@ -37,11 +37,11 @@ public enum SMCError: LocalizedError, Sendable {
 
   public var errorDescription: String? {
     switch self {
-    case .connectionFailed: return "无法打开 AppleSMC"
-    case .firmware(let code): return "SMC 固件错误: \(code)"
-    case .ioKit(let code): return "IOKit 错误: 0x\(String(code, radix: 16))"
-    case .timeout: return "操作超时"
-    case .invalidKey: return "无效的 SMC key"
+    case .connectionFailed: return "Failed to open AppleSMC"
+    case .firmware(let code): return "SMC firmware error: \(code)"
+    case .ioKit(let code): return "IOKit error: 0x\(String(code, radix: 16))"
+    case .timeout: return "Operation timed out"
+    case .invalidKey: return "Invalid SMC key"
     }
   }
 }

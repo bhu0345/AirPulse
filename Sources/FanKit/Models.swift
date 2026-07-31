@@ -88,6 +88,15 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
     }
   }
 
+  public var titleEN: String {
+    switch self {
+    case .auto: return "Auto"
+    case .quiet: return "Quiet"
+    case .balanced: return "Balanced"
+    case .cool: return "Cool"
+    }
+  }
+
   /// Fraction of (min...max) range when not auto. Auto uses system control.
   public var speedFraction: Double? {
     switch self {
@@ -114,13 +123,13 @@ public enum SensorCatalog {
     .init(key: "Tg0U", name: "GPU", isPrimary: true),
     .init(key: "Tg05", name: "GPU", isPrimary: true),
     .init(key: "TG0P", name: "GPU", isPrimary: true),
-    .init(key: "TB1T", name: "电池", isPrimary: true),
-    .init(key: "TB0T", name: "电池", isPrimary: true),
+    .init(key: "TB1T", name: "Battery", isPrimary: true),
+    .init(key: "TB0T", name: "Battery", isPrimary: true),
     .init(key: "Tp00", name: "CPU S1", isPrimary: false),
     .init(key: "Tp04", name: "CPU S2", isPrimary: false),
     .init(key: "Tp08", name: "CPU S3", isPrimary: false),
     .init(key: "Tg0X", name: "GPU 2", isPrimary: false),
     .init(key: "Tg0d", name: "GPU 3", isPrimary: false),
-    .init(key: "Tm0p", name: "内存", isPrimary: false),
+    .init(key: "Tm0p", name: "Memory", isPrimary: false),
   ]
 }

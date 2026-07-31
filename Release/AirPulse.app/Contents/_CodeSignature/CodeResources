@@ -10,19 +10,19 @@
 		<dict>
 			<key>cdhash</key>
 			<data>
-			jFmY6lqa6+ISG4W6HtHdF5dWsV4=
+			IWaYYdzs/m3T0Ja2v2XEj5YMQyo=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"8c5998ea5a9aebe2121b85ba1ed1dd179756b15e"</string>
+			<string>cdhash H"21669861dcecfe6dd3d096b6bf65c48f960c432a"</string>
 		</dict>
 		<key>MacOS/airpulse-cli</key>
 		<dict>
 			<key>cdhash</key>
 			<data>
-			NlYHiWg8kZL+618c4+JPQXR4gv0=
+			QDDIt/PvAKb9DQybJIiP7IW44eY=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"36560789683c9192feeb5f1ce3e24f41747882fd"</string>
+			<string>cdhash H"4030c8b7f3ef00a6fd0d0c9b24888fec85b8e1e6"</string>
 		</dict>
 	</dict>
 	<key>rules</key>

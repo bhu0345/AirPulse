@@ -83,7 +83,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
 
   func applyPreset(_ rawPreset: String, reply: @escaping (Bool, String?) -> Void) {
     guard let preset = FanPreset(rawValue: rawPreset) else {
-      reply(false, "未知预设")
+      reply(false, "Unknown preset")
       return
     }
     do {

@@ -1,67 +1,67 @@
 # AirPulse
 
-面向 MacBook Pro 的原生菜单栏风扇控制器：默认**左右风扇联动**、一键预设，替代 Macs Fan Control 的双表 + 分别 Custom 体验。
+A native macOS menu-bar fan controller for MacBook Pro. **Both fans stay linked by default**, with one-tap presets — a clearer alternative to Macs Fan Control’s dual-pane “Custom per fan” workflow.
 
-详解不足与对策见 [docs/ux-critique.md](docs/ux-critique.md)。环境前置见 [docs/prerequisites.md](docs/prerequisites.md)。
+UX critique of Macs Fan Control: [docs/ux-critique.md](docs/ux-critique.md). Setup notes: [docs/prerequisites.md](docs/prerequisites.md).
 
-## 功能
+> 中文说明见 [README.zh-CN.md](README.zh-CN.md)。
 
-- 菜单栏 popover：关键温度、联动主滑杆、自动 / 安静 / 均衡 / 强冷
-- 可解除联动，分别控制左右风扇
-- Apple Silicon SMC（探测 `F%dmd` / `F%dMd`，可选 `Ftst`）
-- 退出恢复系统 Auto；过热保护；睡眠唤醒后重申手动设定
-- CLI 探针：`airpulse-cli probe [--write]`
+## Features
 
-## 仓库结构
+- Menu-bar popover: key temperatures, linked master slider, Auto / Quiet / Balanced / Cool
+- Optional unlink for independent left/right control
+- **English by default**, with in-app language switch (English / 中文)
+- Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)
+- Restore system Auto on quit; overheat safety; re-assert after sleep/wake
+- CLI probe: `airpulse-cli probe [--write]`
+
+## Repository layout
 
 ```text
-├── README.md
-├── Package.swift          # SwiftPM 工程
-├── Sources/               # 源码（App / CLI / Helper / SMC）
-├── Scripts/               # 构建与 Helper 安装脚本
-├── docs/                  # UX 分析、前置条件、探针结果
-├── Resources/             # LaunchDaemon 模板
-└── Release/AirPulse.app   # 预构建可执行应用（菜单栏 App + CLI + Helper）
+├── README.md / README.zh-CN.md
+├── Package.swift
+├── Sources/               # App / CLI / Helper / SMC
+├── Scripts/               # Build & helper install
+├── docs/
+├── Resources/
+└── Release/AirPulse.app   # Prebuilt app (+ CLI + Helper)
 ```
 
-## 快速开始
+## Quick start
 
-### 直接运行预构建 App
+### Run the prebuilt app
 
 ```bash
 open ./Release/AirPulse.app
 ```
 
-### 从源码构建
+### Build from source
 
 ```bash
 chmod +x Scripts/*.sh
-./Scripts/build-app.sh   # 输出到 Products/ 并同步到 Release/
+./Scripts/build-app.sh   # writes Products/ and syncs Release/
 
-# 只读探针（无需 root）
 ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe
-
-# 写转速可行性（会短暂改风扇并恢复 Auto）
 sudo ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe --write
 ```
 
-可选：安装特权 Helper（免去每次 osascript 弹密码）：
+Optional privileged helper (avoids repeated admin prompts):
 
 ```bash
 sudo ./Scripts/install-helper.sh
 ```
 
-开发期请先退出 **Macs Fan Control**，避免抢控。
+Quit **Macs Fan Control** while developing so the two apps do not fight over SMC writes.
 
-## 架构
+## Architecture
 
 ```text
 AirPulse.app (SwiftUI MenuBarExtra)
-    ├─ 只读：进程内 SMCKit
-    └─ 写入：XPC → AirPulseHelper (LaunchDaemon)
-              或 osascript + airpulse-cli（未装 Helper 时）
+    ├─ reads: in-process SMCKit
+    └─ writes: XPC → AirPulseHelper (LaunchDaemon)
+              or osascript + airpulse-cli (if helper is not installed)
 ```
 
-## 注意
+## Caution
 
-手动控风扇可能影响散热与噪音，有损坏硬件风险。请监控温度；过热时应用会强制强冷或交还系统 Auto。
+Manual fan control can affect cooling and noise, and may risk hardware damage. Watch temperatures; on overheat AirPulse forces Cool or hands control back to system Auto.
