@@ -137,34 +137,63 @@ struct MenuBarPopoverView: View {
   }
 
   private var presetRow: some View {
-    HStack(spacing: 4) {
-      ForEach(FanPreset.allCases) { preset in
-        Button {
-          service.applyPreset(preset)
-        } label: {
-          Text(L.presetTitle(preset))
-            .font(.system(size: 11, weight: .medium))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(
-              RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(
-                  service.activePreset == preset
-                    ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.06)
-                )
-            )
-            .overlay(
-              RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(
-                  service.activePreset == preset ? Color.accentColor.opacity(0.5) : Color.clear,
-                  lineWidth: 1
-                )
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
+    HStack(alignment: .center, spacing: 6) {
+      ForEach(FanPreset.allCases.filter { !$0.isFeatured }) { preset in
+        presetChip(preset)
       }
+      smartChip
     }
+  }
+
+  private func presetChip(_ preset: FanPreset) -> some View {
+    let selected = service.activePreset == preset
+    return Button {
+      service.applyPreset(preset)
+    } label: {
+      Text(L.presetTitle(preset))
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(selected ? Color.accentColor : Color.primary.opacity(0.85))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+          RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(selected ? Color.accentColor.opacity(0.14) : Color.primary.opacity(0.05))
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(L.presetTitle(preset))
+  }
+
+  /// Featured Smart control — tinted like a recommended system action, not a neon badge.
+  private var smartChip: some View {
+    let selected = service.activePreset == .smart
+    return Button {
+      service.applyPreset(.smart)
+    } label: {
+      HStack(spacing: 4) {
+        Image(systemName: "sparkles")
+          .font(.system(size: 10, weight: .semibold))
+        Text(L.presetTitle(.smart))
+          .font(.system(size: 11, weight: .semibold))
+      }
+      .foregroundStyle(selected ? Color.white : Color.accentColor)
+      .frame(maxWidth: .infinity)
+      .padding(.vertical, 8)
+      .padding(.horizontal, 4)
+      .background(
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .fill(selected ? Color.accentColor : Color.accentColor.opacity(0.12))
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .strokeBorder(Color.accentColor.opacity(selected ? 0 : 0.28), lineWidth: 1)
+      )
+      .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(L.presetTitle(.smart))
+    .help(L.smartHelp)
   }
 
   private var linkedSlider: some View {

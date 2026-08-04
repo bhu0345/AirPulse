@@ -65,7 +65,7 @@ public struct SafetyPolicy: Sendable {
       return maxTemp >= blockQuietCelsius
     case .balanced:
       return maxTemp >= blockBalancedCelsius
-    case .auto, .cool, .curve:
+    case .auto, .cool, .smart:
       return false
     }
   }
@@ -80,7 +80,7 @@ public struct SafetyPolicy: Sendable {
   }
 }
 
-/// Default piecewise temperature → fan fraction curve (Curve preset).
+/// Default piecewise temperature → fan fraction curve (Smart preset).
 public enum FanCurve {
   public struct Knot: Sendable {
     public let celsius: Float

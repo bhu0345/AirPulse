@@ -155,10 +155,11 @@ final class FanService: ObservableObject, @unchecked Sendable {
 
   private func loadPersistedSettings() {
     let defaults = UserDefaults.standard
-    if let raw = defaults.string(forKey: SettingsKeys.activePreset),
-      let preset = FanPreset(rawValue: raw)
-    {
-      activePreset = preset
+    if let raw = defaults.string(forKey: SettingsKeys.activePreset) {
+      let migrated = (raw == "curve") ? "smart" : raw
+      if let preset = FanPreset(rawValue: migrated) {
+        activePreset = preset
+      }
     }
     if defaults.object(forKey: SettingsKeys.linkedFraction) != nil {
       linkedFraction = defaults.double(forKey: SettingsKeys.linkedFraction)
@@ -285,7 +286,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private func restorePersistedControlIfNeeded() {
     guard canWrite, !didRestoreAfterConnect else { return }
     didRestoreAfterConnect = true
-    guard desiredManual || activePreset == .curve else { return }
+    guard desiredManual || activePreset == .smart else { return }
     if activePreset == .auto { return }
     applyPreset(activePreset, userInitiated: false)
   }
@@ -503,7 +504,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
     guard requireWriteAccess() else { return }
 
-    if preset == .curve {
+    if preset == .smart {
       applyCurveFraction(force: true)
       return
     }
@@ -543,7 +544,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   private func applyCurveFraction(force: Bool = false) {
-    guard canWrite, activePreset == .curve else { return }
+    guard canWrite, activePreset == .smart else { return }
     let temp = maxPrimaryTemp ?? localController?.maxPrimaryTemperature() ?? 60
     var fraction = FanCurve.fraction(forCelsius: temp)
     fraction = max(fraction, safety.minimumFraction(forMaxTemp: temp))
@@ -561,7 +562,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       DispatchQueue.main.async {
         guard let self else { return }
         if ok {
-          self.statusMessage = self.L.curveStatus(Int(temp), percent: Int(applied * 100))
+          self.statusMessage = self.L.smartStatus(Int(temp), percent: Int(applied * 100))
         } else {
           self.statusMessage = err ?? self.L.failed
         }
@@ -628,7 +629,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
     ) { [weak self] _ in
       guard let self, self.desiredManual, self.canWrite else { return }
       self.statusMessage = self.L.reassertAfterWake
-      if self.activePreset == .curve {
+      if self.activePreset == .smart {
         self.applyCurveFraction(force: true)
       } else if self.linkedEnabled {
         self.applyLinkedFraction(self.linkedFraction)
@@ -686,7 +687,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       }
     }
 
-    if activePreset == .curve, canWrite, !isDraggingSlider {
+    if activePreset == .smart, canWrite, !isDraggingSlider {
       applyCurveFraction(force: false)
     }
   }

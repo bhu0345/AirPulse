@@ -76,7 +76,7 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
   case quiet
   case balanced
   case cool
-  case curve
+  case smart
 
   public var id: String { rawValue }
 
@@ -86,7 +86,7 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
     case .quiet: return "安静"
     case .balanced: return "均衡"
     case .cool: return "强冷"
-    case .curve: return "曲线"
+    case .smart: return "智能"
     }
   }
 
@@ -96,19 +96,22 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
     case .quiet: return "Quiet"
     case .balanced: return "Balanced"
     case .cool: return "Cool"
-    case .curve: return "Curve"
+    case .smart: return "Smart"
     }
   }
 
-  /// Fraction of (min...max) range when not auto. Auto / Curve use dynamic control.
+  /// Fraction of (min...max) range when not auto. Auto / Smart use dynamic control.
   public var speedFraction: Double? {
     switch self {
-    case .auto, .curve: return nil
+    case .auto, .smart: return nil
     case .quiet: return 0.15
     case .balanced: return 0.45
     case .cool: return 0.85
     }
   }
+
+  /// Recommended daily driver — visually emphasized in the UI.
+  public var isFeatured: Bool { self == .smart }
 }
 
 public enum SensorCatalog {

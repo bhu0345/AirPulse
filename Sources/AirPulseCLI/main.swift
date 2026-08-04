@@ -34,7 +34,7 @@ struct AirPulseCLI {
         try runLinked(fraction: fraction)
       case "preset":
         guard args.count >= 2, let preset = FanPreset(rawValue: args[1]) else {
-          fputs("Usage: airpulse-cli preset <auto|quiet|balanced|cool|curve>\n", stderr)
+          fputs("Usage: airpulse-cli preset <auto|quiet|balanced|cool|smart>\n", stderr)
           exit(1)
         }
         try runPreset(preset)

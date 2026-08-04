@@ -99,7 +99,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       let c = try ensureController()
       _ = try c.applyPreset(preset)
       desiredPreset = preset
-      if preset == .curve {
+      if preset == .smart {
         let temp = c.maxPrimaryTemperature() ?? 60
         desiredFraction = FanCurve.fraction(forCelsius: temp)
       } else {
@@ -195,12 +195,12 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       return
     case .forceCool, .escalateFromBalanced:
       if desiredPreset == .quiet || desiredPreset == .balanced
-        || (desiredPreset != .curve && (desiredFraction ?? 1) < safety.minimumFraction(forMaxTemp: maxTemp))
+        || (desiredPreset != .smart && (desiredFraction ?? 1) < safety.minimumFraction(forMaxTemp: maxTemp))
       {
         _ = try? c.applyPreset(.cool)
         desiredPreset = .cool
         desiredFraction = FanPreset.cool.speedFraction
-      } else if desiredPreset == .curve, safety.evaluate(maxTemp: maxTemp) == .forceCool {
+      } else if desiredPreset == .smart, safety.evaluate(maxTemp: maxTemp) == .forceCool {
         _ = try? c.applyPreset(.cool)
         desiredPreset = .cool
         desiredFraction = FanPreset.cool.speedFraction
@@ -219,7 +219,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       break
     }
 
-    if desiredPreset == .curve, let temp = maxTemp {
+    if desiredPreset == .smart, let temp = maxTemp {
       var fraction = FanCurve.fraction(forCelsius: temp)
       fraction = max(fraction, safety.minimumFraction(forMaxTemp: maxTemp))
       desiredFraction = fraction

@@ -142,7 +142,7 @@ public final class FanController: @unchecked Sendable {
       return .direct
     case .quiet, .balanced, .cool:
       return try setLinkedFraction(preset.speedFraction ?? 0.45)
-    case .curve:
+    case .smart:
       let temp = maxPrimaryTemperature() ?? 60
       let fraction = FanCurve.fraction(forCelsius: temp)
       return try setLinkedFraction(fraction)
