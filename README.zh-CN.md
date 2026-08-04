@@ -10,11 +10,21 @@
 
 > English README: [README.md](README.md)
 
+## 模式
+
+控制模型刻意简化，只保留三种：
+
+| 模式 | 作用 |
+|------|------|
+| **AirPulse Smart mode（智能）** | 日常推荐。按温度自动调速（见下方映射表）。 |
+| **Custom（自定义）** | 用滑杆设定固定联动转速。 |
+| **Auto（自动）** | 交还给 macOS / SMC。 |
+
 ## 为什么 AirPulse Smart mode 比系统 Auto 更好用
 
 macOS **自动（Auto）** 把风扇交给系统。能用，但是黑盒：常常先憋很久，温度已经很高了才猛地拉高转速。你看不到规则，也调不了。
 
-**AirPulse Smart mode** 是答案：一条透明的 **温度 → 转速** 策略，由你掌控。
+**AirPulse Smart mode** 是透明的 **温度 → 转速** 策略，由你掌控。
 
 | | 系统 **Auto** | **AirPulse Smart mode** |
 |--|---------------|-------------------------|
@@ -33,42 +43,40 @@ macOS **自动（Auto）** 把风扇交给系统。能用，但是黑盒：常�
 | 82°C | ~70% |
 | ≥92°C | ~95% — 强力散热 |
 
-**日常建议直接用 AirPulse Smart mode。** 需要固定转速？切 **自定义（Custom）** 用滑杆。想交还给系统？点 **自动（Auto）**。
-
 ## 热安全
 
-风扇开太低、负载又重时容易囤热。AirPulse 会主动拦住：
+风扇开太低、负载又重时容易囤热。AirPulse 会主动拦住——尤其在 **自定义** 模式下：
 
 | 阈值 | 行为 |
 |------|------|
-| **≥78°C** | 自定义滑杆地板约 45% |
+| **≥78°C** | 最低转速地板约 45% |
 | **≥85°C** | 地板约 70% |
-| **≥90°C** | 紧急抬升约 85%（或 Smart 曲线，取更高） |
+| **≥90°C** | 紧急抬升约 85%（或 Smart 映射，取更高） |
 | **≥100°C** | 交还系统 **Auto** |
 
 另外：退出恢复 Auto、睡眠唤醒后重申设定、Helper 预热减轻首次切手动延迟。
 
 ## 下载
 
-最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**
+最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**（当前 **v0.2.0+**）
 
 1. 下载 `AirPulse-x.y.z.dmg`
 2. 拖到 **应用程序**
 3. 启动（菜单栏风扇图标）
 4. 点一次 **启用风扇控制**（管理员密码）
-5. 日常优先选 **AirPulse Smart mode**，需要时再切 **自定义** / **自动**
+5. 日常选 **AirPulse Smart mode**，需要时再切 **自定义** / **自动**
 
 > 未签名构建：右键 → **打开**，或在 **系统设置 → 隐私与安全性** 允许。
 
 ## 功能
 
 - 菜单栏：CPU / GPU / 电池温度 + 联动主滑杆
-- 预设：**自动 · 自定义 · 智能**（**AirPulse Smart mode**）
+- 三种预设：**自动 · 自定义 · 智能**（Smart 在界面上突出显示）
 - 可解除联动，分别控制左右风扇
 - 登录时打开 + 记住上次预设 / 转速
 - 默认英语，应用内 **English / 中文**
 - Apple Silicon SMC（`F%dmd` / `F%dMd`，可选 `Ftst`）
-- CLI：`airpulse-cli probe [--write]`
+- CLI：`airpulse-cli probe [--write]` / `preset <auto\|custom\|smart>`
 
 ## 快速开始
 

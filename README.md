@@ -10,11 +10,21 @@ Built for **Apple Silicon** MacBook / MacBook Pro (M-series). Fans on both sides
 
 > 中文说明见 [README.zh-CN.md](README.zh-CN.md).
 
+## Modes
+
+AirPulse keeps the control model simple — three modes only:
+
+| Mode | What it does |
+|------|----------------|
+| **AirPulse Smart mode** | Recommended daily driver. Fan speed follows temperature automatically (see map below). |
+| **Custom** | You set a fixed linked speed with the slider. |
+| **Auto** | Hands control back to macOS / SMC. |
+
 ## Why AirPulse Smart mode beats system Auto
 
 macOS **Auto** keeps fans under system control. It works — but it is a black box: fans often stay quiet too long, then spike hard when temperatures are already high. You cannot see the rule, and you cannot tune it.
 
-**AirPulse Smart mode** is the answer: a transparent **temperature → fan speed** policy that *you* own.
+**AirPulse Smart mode** is transparent: a **temperature → fan speed** policy that *you* own.
 
 | | System **Auto** | **AirPulse Smart mode** |
 |--|-----------------|-------------------------|
@@ -33,16 +43,14 @@ Default AirPulse Smart mode map (linear between points):
 | 82°C | ~70% |
 | ≥92°C | ~95% — strong cooling |
 
-**Use AirPulse Smart mode as your daily driver.** Need a fixed speed? Switch to **Custom** and use the slider. Prefer the OS? Tap **Auto**.
-
 ## Thermal safety
 
-Leaving fans too low under load can pack heat. AirPulse actively prevents that:
+Leaving fans too low under load can pack heat. AirPulse actively prevents that — especially in **Custom**:
 
 | Threshold | Action |
 |-----------|--------|
-| **≥78°C** | Slider / Custom floor ≈45% |
-| **≥85°C** | Floor ≈70% |
+| **≥78°C** | Minimum floor ≈45% |
+| **≥85°C** | Minimum floor ≈70% |
 | **≥90°C** | Emergency cool ≈85% (or Smart map, whichever is higher) |
 | **≥100°C** | Hand control back to system **Auto** |
 
@@ -50,25 +58,25 @@ Also: restore Auto on quit, re-assert after sleep/wake, and helper warm-up so th
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)**
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v0.2.0+**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**
 3. Launch from Applications (menu-bar fan icon)
 4. Tap **Enable Fan Control** once (admin password)
-5. Prefer **AirPulse Smart mode** — or **Custom** / **Auto** when you want them
+5. Choose **AirPulse Smart mode** for everyday use — or **Custom** / **Auto**
 
 > Unsigned build first open: right-click → **Open**, or allow under **System Settings → Privacy & Security**.
 
 ## Features
 
 - Menu-bar popover: CPU / GPU / battery temps + linked master slider
-- Presets: **Auto · Custom · Smart** (**AirPulse Smart mode**)
+- Three presets: **Auto · Custom · Smart** (AirPulse Smart mode is visually highlighted)
 - Optional unlink for independent left/right fans
 - Launch at Login + remembers last preset / speed
 - English UI by default, in-app **English / 中文**
 - Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)
-- CLI: `airpulse-cli probe [--write]`
+- CLI: `airpulse-cli probe [--write]` / `preset <auto\|custom\|smart>`
 
 ## Quick start
 
