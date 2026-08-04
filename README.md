@@ -102,4 +102,4 @@ Manual fan control can affect cooling, noise, and hardware longevity. AirPulse�
 
 ## Keywords
 
-`mac fan control` · `macbook fan control` · `macbook pro fan Smart mode` · `macos fan controller` · `apple silicon fan` · `smc fan control` · `menu bar fan app`
+`mac fan control` · `macbook fan control` · `macbook pro smart fan` · `macos fan controller` · `apple silicon fan` · `smc fan control` · `menu bar fan app`
