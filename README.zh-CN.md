@@ -4,88 +4,92 @@
   <img src="Resources/AppIcon-256.png" width="128" height="128" alt="AirPulse 图标" />
 </p>
 
-**AirPulse** 是开源的 **Mac 风扇控制**（Mac fan control）应用：菜单栏监控温度，并在 **Apple Silicon**（M 系列）MacBook / MacBook Pro 上手动调节风扇转速。
+**AirPulse** 是开源的 **Mac 风扇控制**应用：菜单栏看温度、左右风扇默认联动，以及智能 **曲线（Curve）** 模式——在风扇突然狂转之前，就按温度平滑加速。
 
-默认**左右风扇联动**，一键预设（自动 / 安静 / 均衡 / 强冷）；也可解除联动分别控制。
+面向 **Apple Silicon** MacBook / MacBook Pro（M 系列）。
 
-> 寻找轻量的 **macOS 风扇控制器**、或基于 SMC 调节 MacBook 风扇 RPM 的方案？请下载下方 DMG 或自行编译。  
 > English README: [README.md](README.md)
 
-## 为什么选 AirPulse
+## 为什么 Curve 比系统 Auto 更好用
 
-- 原生 SwiftUI **菜单栏 Mac 风扇控制**，界面简洁
-- 联动主滑杆 + 预设，兼顾 MacBook Pro 噪音与散热
-- **曲线**模式：按温度自动调速
-- **登录时打开** + 记住上次预设 / 转速
-- 热安全：高温拦截安静/均衡、抬高最低转速、强冷 / 交还 Auto
-- 从 Apple **SMC** 读取 CPU / GPU / 电池温度；写转速需一次特权 Helper
-- 默认英语界面，应用内可切换 **English / 中文**
-- 退出恢复系统 Auto；睡眠唤醒后重申手动设定
+macOS **自动（Auto）** 把风扇交给系统。能用，但是黑盒：常常先憋很久，温度已经很高了才猛地拉高转速。你看不到规则，也调不了。
 
-## 功能
+**Curve** 是 AirPulse 的方案：一条透明的 **温度 → 转速** 策略，由你掌控。
 
-- 菜单栏 popover：关键温度、联动主滑杆、自动 / 安静 / 均衡 / 强冷 / 曲线
-- 可解除联动，分别控制左右风扇
-- Apple Silicon SMC（`F%dmd` / `F%dMd`，可选 `Ftst`）
-- CLI 探针：`airpulse-cli probe [--write]`
-- 连接 Helper 后预热（减轻首次切手动延迟）
-- 可选 Developer ID 公证脚本（`Scripts/sign-and-notarize.sh`）
+| | 系统 **Auto** | AirPulse **Curve** |
+|--|---------------|---------------------|
+| 谁决定转速 | 苹果 SMC / thermalmonitord | AirPulse，约每秒更新 |
+| 何时加速 | 往往偏晚，然后很猛 | 更早、更平滑爬升 |
+| 可预期？ | 否 | 是 — 固定折点，心里有数 |
+| 噪音体验 | 负载下突然起飞 | 随温度渐变 |
+| 安全网 | 仅系统 | Curve **再加** 安静/均衡拦截与转速地板 |
+
+默认曲线（点与点之间线性插值）：
+
+| 温度 | 风扇（相对最小～最大） |
+|------|------------------------|
+| ≤55°C | ~15% — 凉快时保持安静 |
+| 70°C | ~40% |
+| 82°C | ~70% |
+| ≥92°C | ~95% — 强力散热 |
+
+**日常建议直接用 Curve**：写代码、剪视频、轻度游戏时不用盯着滑杆，又比干等系统突然拉满更从容。需要时仍可一键切安静 / 均衡 / 强冷 / 自动。
+
+## 热安全（高温不会还卡在安静模式）
+
+手动控风扇最怕：重负载时还开着 **安静（Quiet）**。AirPulse 会主动拦住：
+
+| 阈值 | 行为 |
+|------|------|
+| **≥78°C** | **禁止 Quiet**；已在 Quiet → 升到 Balanced；滑杆地板约 45% |
+| **≥85°C** | **禁止 Balanced** / 倾向强冷；滑杆地板约 70% |
+| **≥90°C** | 强制 **Cool（强冷）** |
+| **≥100°C** | 交还系统 **Auto** |
+
+另外：退出恢复 Auto、睡眠唤醒后重申设定、Helper 预热减轻首次切手动延迟。
 
 ## 下载
 
-从 **[Releases](https://github.com/bhu0345/AirPulse/releases)** 获取最新 macOS 磁盘镜像：
+最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**
 
 1. 下载 `AirPulse-x.y.z.dmg`
-2. 打开 DMG，将 **AirPulse** 拖到 **应用程序**
-3. 从应用程序启动（菜单栏风扇图标）
-4. 首次点击 **启用风扇控制**（输入一次管理员密码）安装助手
+2. 拖到 **应用程序**
+3. 启动（菜单栏风扇图标）
+4. 点一次 **启用风扇控制**（管理员密码）
+5. 日常优先选 **Curve**，需要时再切 Auto / Quiet / Balanced / Cool
 
-> 未签名构建首次打开：右键 → **打开**，或在 **系统设置 → 隐私与安全性** 中允许。
+> 未签名构建：右键 → **打开**，或在 **系统设置 → 隐私与安全性** 允许。
+
+## 功能
+
+- 菜单栏：CPU / GPU / 电池温度 + 联动主滑杆
+- 预设：**自动 · 安静 · 均衡 · 强冷 · 曲线**
+- 可解除联动，分别控制左右风扇
+- 登录时打开 + 记住上次预设 / 转速
+- 默认英语，应用内 **English / 中文**
+- Apple Silicon SMC（`F%dmd` / `F%dMd`，可选 `Ftst`）
+- CLI：`airpulse-cli probe [--write]`
 
 ## 快速开始
 
-### 直接运行仓库内预构建 App
-
 ```bash
 open ./Release/AirPulse.app
-```
-
-### 从源码构建
-
-```bash
+# 或从源码：
 chmod +x Scripts/*.sh
 ./Scripts/build-app.sh
-./Scripts/package-dmg.sh   # 可选：生成 dist/AirPulse-0.1.0.dmg
-
-./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe
-sudo ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe --write
+./Scripts/package-dmg.sh
 ```
-
-可选：安装特权 Helper：
 
 ```bash
-sudo ./Scripts/install-helper.sh
+sudo ./Scripts/install-helper.sh   # 可选；或用应用内「启用风扇控制」
 ```
 
-请勿同时运行其他 Mac 风扇控制 / SMC 风扇软件，以免抢写 SMC。
-
-## 仓库结构
-
-```text
-├── README.md / README.zh-CN.md
-├── Package.swift
-├── Sources/
-├── Scripts/
-├── docs/
-├── Resources/
-├── Release/AirPulse.app
-└── dist/                  # AirPulse-*.dmg（已 gitignore；见 Releases）
-```
-
-## 关键词
-
-`mac风扇控制` · `macbook风扇` · `mac fan control` · `macbook fan control` · `macos风扇控制` · `苹果硅风扇` · `SMC风扇`
+请勿同时运行其他 Mac 风扇控制软件，以免抢写 SMC。
 
 ## 注意
 
-手动控风扇可能影响散热与噪音，有损坏硬件风险。请监控温度；过热时应用会强制强冷或交还系统 Auto。
+手动控风扇可能影响散热、噪音与硬件寿命。安全层能降低风险，不能消除风险。未知负载下优先 **Curve** 或 **Auto**，温度持续升高时请勿忽视。
+
+## 关键词
+
+`mac风扇控制` · `macbook风扇曲线` · `mac fan control` · `macbook fan control` · `macos风扇控制` · `苹果硅风扇` · `SMC风扇`

@@ -4,83 +4,87 @@
   <img src="Resources/AppIcon-256.png" width="128" height="128" alt="AirPulse icon" />
 </p>
 
-**AirPulse** is a free, open-source **Mac fan control** app for macOS. It sits in the menu bar and lets you monitor temperatures and manually set MacBook / MacBook Pro fan speeds on **Apple Silicon** (including M-series chips).
+**AirPulse** is a free, open-source **Mac fan control** app for macOS. Menu-bar temperatures, linked dual-fan control, and a smart **Curve** mode that reacts to heat *before* your MacBook turns into a jet engine.
 
-**Fans on both sides are controlled together by default**, with one-tap presets (Auto / Quiet / Balanced / Cool). Optional unlink for independent left/right control.
+Built for **Apple Silicon** MacBook / MacBook Pro (M-series). Fans on both sides stay linked by default.
 
-> Looking for a lightweight **macOS fan controller** or an alternative way to manage MacBook fan RPM via SMC? Download the DMG below or build from source.  
-> 中文说明见 [README.zh-CN.md](README.zh-CN.md)。
+> 中文说明见 [README.zh-CN.md](README.zh-CN.md).
 
-## Why AirPulse
+## Why Curve beats system Auto
 
-- Native SwiftUI **menu-bar Mac fan control** — no Electron, no cluttered dashboard
-- Linked dual-fan slider + presets for everyday **MacBook Pro fan** noise/cooling tradeoffs
-- **Curve** mode: temperature → fan speed automatically
-- **Launch at Login** + remembers last preset / speed
-- Thermal safety: blocks Quiet/Balanced when hot; raises a minimum floor; Cool / Auto fallback
-- Reads CPU / GPU / battery temps from Apple **SMC**; writes fan targets through a one-time privileged helper
-- English UI by default, with in-app **English / 中文**
-- Restore system Auto on quit; re-assert after sleep/wake
+macOS **Auto** keeps fans under system control. It works — but it is a black box: fans often stay quiet too long, then spike hard when temperatures are already high. You cannot see the rule, and you cannot tune it.
 
-## Features
+**Curve** is AirPulse’s answer: a transparent **temperature → fan speed** policy that *you* own.
 
-- Menu-bar popover: key temperatures, master slider, Auto / Quiet / Balanced / Cool / Curve
-- Optional unlink for independent left/right control
-- Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)
-- CLI probe: `airpulse-cli probe [--write]`
-- Helper warm-up on connect (reduces first-write delay)
-- Optional Developer ID notarization script (`Scripts/sign-and-notarize.sh`)
+| | System **Auto** | AirPulse **Curve** |
+|--|-----------------|--------------------|
+| Who decides RPM | Apple SMC / thermalmonitord | AirPulse, every ~1s |
+| When fans rise | Often late, then aggressive | Earlier, smoother climb |
+| Predictable? | No — opaque | Yes — fixed knots you can reason about |
+| Noise profile | Sudden ramp-ups under load | Gradual with temperature |
+| Safety net | System only | Curve **plus** Quiet/Balanced blocks & thermal floor |
+
+Default Curve map (linear between points):
+
+| Temp | Fan (of min→max range) |
+|------|-------------------------|
+| ≤55°C | ~15% — stay quiet when cool |
+| 70°C | ~40% |
+| 82°C | ~70% |
+| ≥92°C | ~95% — strong cooling |
+
+**Use Curve as your daily driver** when you want cooler sustained loads without babysitting a slider — coding, video, light gaming — while Quiet / Balanced / Cool remain one-tap overrides.
+
+## Thermal safety (Quiet won’t cook your Mac)
+
+Manual fan apps can be dangerous if you leave **Quiet** on during a heavy compile. AirPulse actively prevents that:
+
+| Threshold | Action |
+|-----------|--------|
+| **≥78°C** | **Quiet blocked**; if already on Quiet → bump to Balanced; slider floor ≈45% |
+| **≥85°C** | **Balanced blocked** / escalate toward Cool; slider floor ≈70% |
+| **≥90°C** | Force **Cool** |
+| **≥100°C** | Hand control back to system **Auto** |
+
+Also: restore Auto on quit, re-assert after sleep/wake, and helper warm-up so the first manual write is less laggy.
 
 ## Download
 
-Get the latest macOS disk image from **[Releases](https://github.com/bhu0345/AirPulse/releases)**:
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)**
 
 1. Download `AirPulse-x.y.z.dmg`
-2. Open the DMG and drag **AirPulse** into **Applications**
-3. Launch AirPulse from Applications (menu-bar fan icon)
-4. Tap **Enable Fan Control** once (admin password) to install the helper
+2. Drag **AirPulse** into **Applications**
+3. Launch from Applications (menu-bar fan icon)
+4. Tap **Enable Fan Control** once (admin password)
+5. Prefer **Curve** for everyday use — or Auto / Quiet / Balanced / Cool when you want them
 
-> First launch of an unsigned build: right-click → **Open**, or allow it under **System Settings → Privacy & Security**.
+> Unsigned build first open: right-click → **Open**, or allow under **System Settings → Privacy & Security**.
+
+## Features
+
+- Menu-bar popover: CPU / GPU / battery temps + linked master slider
+- Presets: **Auto · Quiet · Balanced · Cool · Curve**
+- Optional unlink for independent left/right fans
+- Launch at Login + remembers last preset / speed
+- English UI by default, in-app **English / 中文**
+- Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)
+- CLI: `airpulse-cli probe [--write]`
 
 ## Quick start
 
-### Run from this repo
-
 ```bash
 open ./Release/AirPulse.app
-```
-
-### Build from source
-
-```bash
+# or from source:
 chmod +x Scripts/*.sh
-./Scripts/build-app.sh   # writes Products/ and syncs Release/
-./Scripts/package-dmg.sh # optional: dist/AirPulse-0.1.0.dmg
-
-./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe
-sudo ./Release/AirPulse.app/Contents/MacOS/airpulse-cli probe --write
+./Scripts/build-app.sh
+./Scripts/package-dmg.sh   # optional DMG under dist/
 ```
-
-Optional privileged helper (avoids repeated admin prompts):
 
 ```bash
-sudo ./Scripts/install-helper.sh
+sudo ./Scripts/install-helper.sh   # optional; or use in-app Enable Fan Control
 ```
 
-Avoid running another Mac fan control / SMC fan app at the same time — they will conflict on SMC writes.
-
-## Repository layout
-
-```text
-├── README.md / README.zh-CN.md
-├── Package.swift
-├── Sources/               # App / CLI / Helper / SMC
-├── Scripts/               # Build, helper install, DMG package
-├── docs/
-├── Resources/
-├── Release/AirPulse.app   # Prebuilt app (+ CLI + Helper)
-└── dist/                  # AirPulse-*.dmg (gitignored; see Releases)
-```
+Do not run another Mac fan control app at the same time — SMC writes will conflict.
 
 ## Architecture
 
@@ -88,13 +92,14 @@ Avoid running another Mac fan control / SMC fan app at the same time — they wi
 AirPulse.app (SwiftUI MenuBarExtra)
     ├─ reads: in-process SMCKit
     └─ writes: XPC → AirPulseHelper (LaunchDaemon)
-              or osascript + airpulse-cli (if helper is not installed)
 ```
 
-## Keywords / topics
-
-`mac fan control` · `macbook fan control` · `macbook pro fan` · `macos fan controller` · `apple silicon fan` · `smc fan control` · `menu bar fan app`
+Gatekeeper-friendly distribution needs a Developer ID — see [`docs/prerequisites.md`](docs/prerequisites.md) and `Scripts/sign-and-notarize.sh` (ad-hoc builds work locally with right-click Open).
 
 ## Caution
 
-Manual fan control can affect cooling and noise, and may risk hardware damage. Watch temperatures; on overheat AirPulse forces Cool or hands control back to system Auto.
+Manual fan control can affect cooling, noise, and hardware longevity. AirPulse’s safety layer reduces risk; it does not eliminate it. Prefer **Curve** or **Auto** under unknown workloads; never ignore rising temperatures.
+
+## Keywords
+
+`mac fan control` · `macbook fan control` · `macbook pro fan curve` · `macos fan controller` · `apple silicon fan` · `smc fan control` · `menu bar fan app`
