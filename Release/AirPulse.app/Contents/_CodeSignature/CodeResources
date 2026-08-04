@@ -15,19 +15,19 @@
 		<dict>
 			<key>cdhash</key>
 			<data>
-			fDE9yxPsqjAQ7jXi8oPaEOuiL98=
+			IISp6MF7dw+yUG6kCiSGlGFF4zk=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"7c313dcb13ecaa3010ee35e2f283da10eba22fdf"</string>
+			<string>cdhash H"2084a9e8c17b770fb2506ea40a2486946145e339"</string>
 		</dict>
 		<key>MacOS/airpulse-cli</key>
 		<dict>
 			<key>cdhash</key>
 			<data>
-			Y7U2ydDhxJ3EOA/YmZ6C4Ynax5E=
+			wyfSzvrz8Cn/B1sm79nIKkIJA9w=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"63b536c9d0e1c49dc4380fd8999e82e189dac791"</string>
+			<string>cdhash H"c327d2cefaf3f029ff075b26efd9c82a420903dc"</string>
 		</dict>
 		<key>Resources/AppIcon.icns</key>
 		<dict>

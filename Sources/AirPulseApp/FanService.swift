@@ -156,7 +156,12 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private func loadPersistedSettings() {
     let defaults = UserDefaults.standard
     if let raw = defaults.string(forKey: SettingsKeys.activePreset) {
-      let migrated = (raw == "curve") ? "smart" : raw
+      let migrated: String
+      switch raw {
+      case "curve": migrated = "smart"
+      case "balanced", "quiet", "cool": migrated = "custom"
+      default: migrated = raw
+      }
       if let preset = FanPreset(rawValue: migrated) {
         activePreset = preset
       }
@@ -480,25 +485,14 @@ final class FanService: ObservableObject, @unchecked Sendable {
 
   func applyPreset(_ preset: FanPreset, userInitiated: Bool = true) {
     let maxTemp = maxPrimaryTemp
-    if userInitiated, safety.shouldBlock(preset: preset, maxTemp: maxTemp) {
-      onMain {
-        if preset == .quiet {
-          self.safetyNotice = self.L.safetyBlockQuiet
-          self.statusMessage = self.L.safetyBlockQuiet
-        } else {
-          self.safetyNotice = self.L.safetyBlockBalanced
-          self.statusMessage = self.L.safetyBlockBalanced
-        }
-      }
-      return
-    }
+    _ = userInitiated
 
     onMain {
       self.activePreset = preset
       self.desiredManual = preset != .auto
-      if let fraction = preset.speedFraction {
-        let floored = max(fraction, self.safety.minimumFraction(forMaxTemp: maxTemp))
-        self.linkedFraction = floored
+      if preset == .custom {
+        let base = self.linkedFraction > 0 ? self.linkedFraction : (preset.speedFraction ?? 0.45)
+        self.linkedFraction = max(base, self.safety.minimumFraction(forMaxTemp: maxTemp))
       }
       self.persistSettings()
     }
@@ -506,6 +500,12 @@ final class FanService: ObservableObject, @unchecked Sendable {
 
     if preset == .smart {
       applyCurveFraction(force: true)
+      return
+    }
+
+    if preset == .custom {
+      let value = linkedFraction > 0 ? linkedFraction : (preset.speedFraction ?? 0.45)
+      applyLinkedFraction(value)
       return
     }
 
@@ -528,7 +528,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
     onMain {
       self.linkedFraction = floored
-      self.activePreset = .balanced
+      self.activePreset = .custom
       self.desiredManual = true
       self.lastCurveFraction = nil
       self.persistSettings()
@@ -541,6 +541,14 @@ final class FanService: ObservableObject, @unchecked Sendable {
         self.refresh()
       }
     }
+  }
+
+  private func applyEmergencyCool() {
+    onMain {
+      self.safetyNotice = self.L.safetyWarning
+      self.statusMessage = self.L.safetyWarning
+    }
+    applyLinkedFraction(FanPreset.emergencyCoolFraction)
   }
 
   private func applyCurveFraction(force: Bool = false) {
@@ -648,27 +656,15 @@ final class FanService: ObservableObject, @unchecked Sendable {
     case .restoreAuto:
       safetyNotice = L.safetyCritical
       if desiredManual, canWrite { restoreAuto() }
-    case .forceCool:
+    case .forceEmergencyCool:
       safetyNotice = L.safetyWarning
-      if activePreset != .cool, canWrite { applyPreset(.cool, userInitiated: false) }
-    case .escalateFromBalanced:
-      if activePreset == .quiet || activePreset == .balanced
-        || (desiredManual && linkedFraction < safety.minimumFraction(forMaxTemp: maxTemp))
-      {
-        safetyNotice = L.safetyBlockBalanced
-        if canWrite { applyPreset(.cool, userInitiated: false) }
-      } else if desiredManual {
-        let floor = safety.minimumFraction(forMaxTemp: maxTemp)
-        if linkedFraction + 0.01 < floor, canWrite {
-          safetyNotice = L.safetyThermalFloor
-          applyLinkedFraction(floor)
-        }
+      if activePreset == .smart, canWrite {
+        applyCurveFraction(force: true)
+      } else if canWrite {
+        applyEmergencyCool()
       }
-    case .bumpFromQuiet:
-      if activePreset == .quiet {
-        safetyNotice = L.safetyBlockQuiet
-        if canWrite { applyPreset(.balanced, userInitiated: false) }
-      } else if desiredManual {
+    case .raiseHighFloor, .raiseLowFloor:
+      if desiredManual {
         let floor = safety.minimumFraction(forMaxTemp: maxTemp)
         if linkedFraction + 0.01 < floor, canWrite {
           safetyNotice = L.safetyThermalFloor
@@ -677,11 +673,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
       }
     case .none:
       if safetyNotice == L.safetyCritical || safetyNotice == L.safetyWarning
-        || safetyNotice == L.safetyBlockQuiet || safetyNotice == L.safetyBlockBalanced
         || safetyNotice == L.safetyThermalFloor
       {
-        // Keep notice until temps cool; clear only when fully safe.
-        if let maxTemp, maxTemp < AirPulseConfig.blockQuietCelsius {
+        if let maxTemp, maxTemp < AirPulseConfig.lowFloorCelsius {
           safetyNotice = nil
         }
       }

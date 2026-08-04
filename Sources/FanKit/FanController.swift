@@ -140,7 +140,7 @@ public final class FanController: @unchecked Sendable {
     case .auto:
       try restoreSystemControl()
       return .direct
-    case .quiet, .balanced, .cool:
+    case .custom:
       return try setLinkedFraction(preset.speedFraction ?? 0.45)
     case .smart:
       let temp = maxPrimaryTemperature() ?? 60

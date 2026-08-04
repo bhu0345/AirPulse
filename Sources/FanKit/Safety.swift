@@ -6,44 +6,43 @@ public enum AirPulseConfig {
   public static let helperMachService = "com.bingtaohu.AirPulse.helper"
   public static let helperLabel = "com.bingtaohu.AirPulse.helper"
 
-  /// Refuse / escalate Quiet at or above this temperature (°C).
-  public static let blockQuietCelsius: Float = 78
-  /// Refuse / escalate Balanced at or above this temperature (°C).
-  public static let blockBalancedCelsius: Float = 85
-  /// If any primary sensor exceeds this (°C), force Cool preset / raise fans.
+  /// Raise minimum fan fraction at or above this temperature (°C).
+  public static let lowFloorCelsius: Float = 78
+  /// Stronger minimum fan fraction at or above this temperature (°C).
+  public static let highFloorCelsius: Float = 85
+  /// Force emergency cooling fraction at or above this (°C).
   public static let warningCelsius: Float = 90
   /// If exceeded, restore Auto so system thermal management takes over.
   public static let criticalCelsius: Float = 100
 
-  /// How often the app re-asserts manual targets against thermalmonitord reclaim.
   public static let reassertInterval: TimeInterval = 2.0
   public static let pollInterval: TimeInterval = 1.0
 }
 
 public enum SafetyAction: String, Sendable, Codable {
   case none
-  /// Quiet is unsafe; bump toward Balanced (or Cool if already hotter).
-  case bumpFromQuiet
-  /// Balanced / Quiet unsafe at this temp; force Cool.
-  case escalateFromBalanced
-  case forceCool
+  /// Mild heat — enforce a moderate RPM floor.
+  case raiseLowFloor
+  /// Hot — enforce a high RPM floor / emergency cool if still too low.
+  case raiseHighFloor
+  case forceEmergencyCool
   case restoreAuto
 }
 
 public struct SafetyPolicy: Sendable {
-  public var blockQuietCelsius: Float
-  public var blockBalancedCelsius: Float
+  public var lowFloorCelsius: Float
+  public var highFloorCelsius: Float
   public var warningCelsius: Float
   public var criticalCelsius: Float
 
   public init(
-    blockQuietCelsius: Float = AirPulseConfig.blockQuietCelsius,
-    blockBalancedCelsius: Float = AirPulseConfig.blockBalancedCelsius,
+    lowFloorCelsius: Float = AirPulseConfig.lowFloorCelsius,
+    highFloorCelsius: Float = AirPulseConfig.highFloorCelsius,
     warningCelsius: Float = AirPulseConfig.warningCelsius,
     criticalCelsius: Float = AirPulseConfig.criticalCelsius
   ) {
-    self.blockQuietCelsius = blockQuietCelsius
-    self.blockBalancedCelsius = blockBalancedCelsius
+    self.lowFloorCelsius = lowFloorCelsius
+    self.highFloorCelsius = highFloorCelsius
     self.warningCelsius = warningCelsius
     self.criticalCelsius = criticalCelsius
   }
@@ -51,31 +50,25 @@ public struct SafetyPolicy: Sendable {
   public func evaluate(maxTemp: Float?) -> SafetyAction {
     guard let maxTemp else { return .none }
     if maxTemp >= criticalCelsius { return .restoreAuto }
-    if maxTemp >= warningCelsius { return .forceCool }
-    if maxTemp >= blockBalancedCelsius { return .escalateFromBalanced }
-    if maxTemp >= blockQuietCelsius { return .bumpFromQuiet }
+    if maxTemp >= warningCelsius { return .forceEmergencyCool }
+    if maxTemp >= highFloorCelsius { return .raiseHighFloor }
+    if maxTemp >= lowFloorCelsius { return .raiseLowFloor }
     return .none
   }
 
-  /// Whether applying this preset should be refused given current max temp.
   public func shouldBlock(preset: FanPreset, maxTemp: Float?) -> Bool {
-    guard let maxTemp else { return false }
-    switch preset {
-    case .quiet:
-      return maxTemp >= blockQuietCelsius
-    case .balanced:
-      return maxTemp >= blockBalancedCelsius
-    case .auto, .cool, .smart:
-      return false
-    }
+    // Auto / Custom / Smart are always selectable; floors clamp speed instead.
+    _ = preset
+    _ = maxTemp
+    return false
   }
 
-  /// Minimum linked fraction so Quiet / low slider cannot pack heat.
+  /// Minimum linked fraction so a low Custom slider cannot pack heat.
   public func minimumFraction(forMaxTemp maxTemp: Float?) -> Double {
     guard let t = maxTemp else { return 0 }
-    if t >= warningCelsius { return 0.85 }
-    if t >= blockBalancedCelsius { return 0.70 }
-    if t >= blockQuietCelsius { return 0.45 }
+    if t >= warningCelsius { return FanPreset.emergencyCoolFraction }
+    if t >= highFloorCelsius { return 0.70 }
+    if t >= lowFloorCelsius { return 0.45 }
     return 0
   }
 }

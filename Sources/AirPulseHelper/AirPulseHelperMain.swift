@@ -120,7 +120,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
     do {
       let c = try ensureController()
       _ = try c.setLinkedFraction(fraction)
-      desiredPreset = .balanced
+      desiredPreset = .custom
       desiredFraction = fraction
       startReassert()
       reply(true, nil)
@@ -193,27 +193,16 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       desiredFraction = nil
       stopReassert()
       return
-    case .forceCool, .escalateFromBalanced:
-      if desiredPreset == .quiet || desiredPreset == .balanced
-        || (desiredPreset != .smart && (desiredFraction ?? 1) < safety.minimumFraction(forMaxTemp: maxTemp))
-      {
-        _ = try? c.applyPreset(.cool)
-        desiredPreset = .cool
-        desiredFraction = FanPreset.cool.speedFraction
-      } else if desiredPreset == .smart, safety.evaluate(maxTemp: maxTemp) == .forceCool {
-        _ = try? c.applyPreset(.cool)
-        desiredPreset = .cool
-        desiredFraction = FanPreset.cool.speedFraction
-      }
-    case .bumpFromQuiet:
-      if desiredPreset == .quiet {
-        _ = try? c.applyPreset(.balanced)
-        desiredPreset = .balanced
-        desiredFraction = FanPreset.balanced.speedFraction
-      }
+    case .forceEmergencyCool:
+      desiredPreset = .custom
+      desiredFraction = FanPreset.emergencyCoolFraction
+    case .raiseHighFloor, .raiseLowFloor:
       let floor = safety.minimumFraction(forMaxTemp: maxTemp)
       if let f = desiredFraction, f < floor {
         desiredFraction = floor
+        if desiredPreset != .smart {
+          desiredPreset = .custom
+        }
       }
     case .none:
       break

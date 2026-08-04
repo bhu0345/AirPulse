@@ -73,9 +73,7 @@ public struct TemperatureReading: Sendable, Identifiable, Codable, Equatable {
 
 public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
   case auto
-  case quiet
-  case balanced
-  case cool
+  case custom
   case smart
 
   public var id: String { rawValue }
@@ -83,9 +81,7 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
   public var titleZH: String {
     switch self {
     case .auto: return "自动"
-    case .quiet: return "安静"
-    case .balanced: return "均衡"
-    case .cool: return "强冷"
+    case .custom: return "自定义"
     case .smart: return "智能"
     }
   }
@@ -93,25 +89,24 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
   public var titleEN: String {
     switch self {
     case .auto: return "Auto"
-    case .quiet: return "Quiet"
-    case .balanced: return "Balanced"
-    case .cool: return "Cool"
+    case .custom: return "Custom"
     case .smart: return "Smart"
     }
   }
 
-  /// Fraction of (min...max) range when not auto. Auto / Smart use dynamic control.
+  /// Default fraction when entering Custom. Smart / Auto are dynamic.
   public var speedFraction: Double? {
     switch self {
     case .auto, .smart: return nil
-    case .quiet: return 0.15
-    case .balanced: return 0.45
-    case .cool: return 0.85
+    case .custom: return 0.45
     }
   }
 
   /// Recommended daily driver — visually emphasized in the UI.
   public var isFeatured: Bool { self == .smart }
+
+  /// Fraction used when thermal safety forces strong cooling (no Cool preset).
+  public static let emergencyCoolFraction: Double = 0.85
 }
 
 public enum SensorCatalog {

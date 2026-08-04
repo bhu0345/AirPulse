@@ -22,7 +22,7 @@ macOS **Auto** keeps fans under system control. It works — but it is a black b
 | When fans rise | Often late, then aggressive | Earlier, smoother climb |
 | Predictable? | No — opaque | Yes — fixed knots you can reason about |
 | Noise profile | Sudden ramp-ups under load | Gradual with temperature |
-| Safety net | System only | Smart mode **plus** Quiet/Balanced blocks & thermal floor |
+| Safety net | System only | Smart mode **plus** thermal floor & emergency boost |
 
 Default AirPulse Smart mode map (linear between points):
 
@@ -33,17 +33,17 @@ Default AirPulse Smart mode map (linear between points):
 | 82°C | ~70% |
 | ≥92°C | ~95% — strong cooling |
 
-**Use AirPulse Smart mode as your daily driver** when you want cooler sustained loads without babysitting a slider — coding, video, light gaming — while Quiet / Balanced / Cool remain one-tap overrides.
+**Use AirPulse Smart mode as your daily driver.** Need a fixed speed? Switch to **Custom** and use the slider. Prefer the OS? Tap **Auto**.
 
-## Thermal safety (Quiet won’t cook your Mac)
+## Thermal safety
 
-Manual fan apps can be dangerous if you leave **Quiet** on during a heavy compile. AirPulse actively prevents that:
+Leaving fans too low under load can pack heat. AirPulse actively prevents that:
 
 | Threshold | Action |
 |-----------|--------|
-| **≥78°C** | **Quiet blocked**; if already on Quiet → bump to Balanced; slider floor ≈45% |
-| **≥85°C** | **Balanced blocked** / escalate toward Cool; slider floor ≈70% |
-| **≥90°C** | Force **Cool** |
+| **≥78°C** | Slider / Custom floor ≈45% |
+| **≥85°C** | Floor ≈70% |
+| **≥90°C** | Emergency cool ≈85% (or Smart map, whichever is higher) |
 | **≥100°C** | Hand control back to system **Auto** |
 
 Also: restore Auto on quit, re-assert after sleep/wake, and helper warm-up so the first manual write is less laggy.
@@ -56,14 +56,14 @@ Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)**
 2. Drag **AirPulse** into **Applications**
 3. Launch from Applications (menu-bar fan icon)
 4. Tap **Enable Fan Control** once (admin password)
-5. Prefer **AirPulse Smart mode** for everyday use — or Auto / Quiet / Balanced / Cool when you want them
+5. Prefer **AirPulse Smart mode** — or **Custom** / **Auto** when you want them
 
 > Unsigned build first open: right-click → **Open**, or allow under **System Settings → Privacy & Security**.
 
 ## Features
 
 - Menu-bar popover: CPU / GPU / battery temps + linked master slider
-- Presets: **Auto · Quiet · Balanced · Cool · Smart** (**AirPulse Smart mode**)
+- Presets: **Auto · Custom · Smart** (**AirPulse Smart mode**)
 - Optional unlink for independent left/right fans
 - Launch at Login + remembers last preset / speed
 - English UI by default, in-app **English / 中文**

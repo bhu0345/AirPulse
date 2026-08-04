@@ -113,18 +113,9 @@ struct L10n {
     t("Temperature critical — restored system Auto", "温度过高，已恢复系统自动控温")
   }
   var safetyWarning: String {
-    t("Temperature high — switched to Cool", "温度偏高，已切换强冷")
-  }
-  var safetyBlockQuiet: String {
     t(
-      "Too hot for Quiet (≥78°C) — use Balanced/Cool or Smart",
-      "温度过高不宜安静模式（≥78°C）— 请用均衡/强冷或智能"
-    )
-  }
-  var safetyBlockBalanced: String {
-    t(
-      "Too hot for Balanced (≥85°C) — switched toward Cool",
-      "温度过高不宜均衡模式（≥85°C）— 已倾向强冷"
+      "Temperature high — raised fans to a safe cooling level",
+      "温度偏高，已抬高风扇到安全散热水平"
     )
   }
   var safetyThermalFloor: String {
@@ -139,8 +130,8 @@ struct L10n {
   }
   var smartHelp: String {
     t(
-      "Smart: fan speed follows temperature automatically — recommended daily mode",
-      "智能：按温度自动调速 — 推荐日常使用"
+      "AirPulse Smart mode: fan speed follows temperature automatically — recommended daily mode",
+      "AirPulse Smart mode：按温度自动调速 — 推荐日常使用"
     )
   }
   var ftstYes: String { t("yes", "有") }
@@ -154,11 +145,9 @@ struct L10n {
   func presetTitle(_ preset: FanPreset) -> String {
     switch preset {
     case .auto: return t("Auto", "自动")
-    case .quiet: return t("Quiet", "安静")
-    case .balanced: return t("Balanced", "均衡")
-    case .cool: return t("Cool", "强冷")
+    case .custom: return t("Custom", "自定义")
     case .smart: return t("Smart", "智能")
-  }
+    }
   }
 
   func sensorName(_ key: String) -> String {
