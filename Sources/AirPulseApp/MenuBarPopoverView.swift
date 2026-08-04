@@ -146,22 +146,23 @@ struct MenuBarPopoverView: View {
             .font(.system(size: 12, weight: .medium))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
+            .background(
+              RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(
+                  service.activePreset == preset
+                    ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.06)
+                )
+            )
+            .overlay(
+              RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .strokeBorder(
+                  service.activePreset == preset ? Color.accentColor.opacity(0.5) : Color.clear,
+                  lineWidth: 1
+                )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
-        .background(
-          RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(
-              service.activePreset == preset
-                ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.06)
-            )
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .strokeBorder(
-              service.activePreset == preset ? Color.accentColor.opacity(0.5) : Color.clear,
-              lineWidth: 1
-            )
-        )
       }
     }
   }

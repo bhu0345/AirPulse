@@ -109,6 +109,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private let safety = SafetyPolicy()
   private var wakeObserver: NSObjectProtocol?
   private var desiredManual = false
+  private var isStarted = false
+  /// Bumps on every helper reconnect so stale disconnect/ping callbacks are ignored.
+  private var helperGeneration = 0
 
   private var L: L10n { L10n.current }
 
@@ -121,12 +124,18 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   func start() {
-    onMain { self.statusMessage = self.L.readingSensors }
-    openLocalRead()
-    tryConnectHelper()
+    if !isStarted {
+      onMain { self.statusMessage = self.L.readingSensors }
+      openLocalRead()
+      startPolling()
+      observeWake()
+      isStarted = true
+      tryConnectHelper()
+    } else if xpc == nil || !canWrite {
+      // Reconnect only when the helper link is missing or not writable.
+      tryConnectHelper()
+    }
     refresh()
-    startPolling()
-    observeWake()
   }
 
   func stop() {
@@ -134,12 +143,16 @@ final class FanService: ObservableObject, @unchecked Sendable {
     pollTimer = nil
     if let wakeObserver {
       NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+      self.wakeObserver = nil
     }
     if desiredManual {
       restoreAuto()
     }
+    helperGeneration += 1
     xpc?.invalidate()
     xpc = nil
+    isStarted = false
+    onMain { self.canWrite = false }
   }
 
   func reloadLocalizedStrings() {
@@ -167,25 +180,29 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   private func tryConnectHelper() {
+    helperGeneration += 1
+    let generation = helperGeneration
+
     xpc?.invalidate()
     let client = HelperXPCClient(machServiceName: AirPulseConfig.helperMachService)
     client.setDisconnectHandler { [weak self] in
       DispatchQueue.main.async {
-        self?.canWrite = false
+        guard let self, self.helperGeneration == generation else { return }
+        self.canWrite = false
       }
     }
     xpc = client
 
     client.ping { [weak self] ok in
       DispatchQueue.main.async {
-        guard let self else { return }
+        guard let self, self.helperGeneration == generation else { return }
         self.canWrite = ok
         self.statusMessage = ok ? self.L.helperConnected : self.L.monitorMode
       }
     }
 
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-      guard let self, !self.canWrite else { return }
+      guard let self, self.helperGeneration == generation, !self.canWrite else { return }
       self.statusMessage = self.L.monitorMode
     }
   }
@@ -447,6 +464,10 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   private func observeWake() {
+    if let wakeObserver {
+      NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+      self.wakeObserver = nil
+    }
     wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
       forName: NSWorkspace.didWakeNotification,
       object: nil,
