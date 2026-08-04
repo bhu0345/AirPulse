@@ -348,6 +348,10 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   func refresh() {
+    // Dragging a slider: skip UI churn so SwiftUI does not rebuild mid-gesture.
+    // Safety still runs on the next non-drag poll.
+    if isDraggingSlider { return }
+
     if let c = localController {
       let newFans = (try? c.allFans()) ?? []
       let temps = c.readTemperatures(primaryOnly: true)
@@ -355,9 +359,10 @@ final class FanService: ObservableObject, @unchecked Sendable {
       let summary = L.hardwareSummary(fanCount: count)
 
       onMain {
-        if !newFans.isEmpty { self.fans = newFans }
-        self.temperatures = temps
-        self.hardwareSummary = summary
+        guard !self.isDraggingSlider else { return }
+        if !newFans.isEmpty, newFans != self.fans { self.fans = newFans }
+        if temps != self.temperatures { self.temperatures = temps }
+        if summary != self.hardwareSummary { self.hardwareSummary = summary }
         if self.unlinkRPM.isEmpty {
           for fan in newFans {
             let span = max(1, fan.maxRPM - fan.minRPM)
@@ -368,13 +373,17 @@ final class FanService: ObservableObject, @unchecked Sendable {
         // never yank it back from hardware while dragging or after a write.
         self.enforceSafetyLocally()
       }
+      // Local SMC already feeds the popover; skip a second XPC fan fetch that
+      // would publish again ~1s and hitch the slider.
+      return
     }
 
-    // XPC path — decode on XPC queue inside HelperXPCClient, then hop to main.
+    // Fallback when local SMC is unavailable.
     xpc?.listFans { [weak self] remoteFans in
-      guard !remoteFans.isEmpty else { return }
+      guard let self, !remoteFans.isEmpty, !self.isDraggingSlider else { return }
       DispatchQueue.main.async {
-        self?.fans = remoteFans
+        guard !self.isDraggingSlider, remoteFans != self.fans else { return }
+        self.fans = remoteFans
       }
     }
   }

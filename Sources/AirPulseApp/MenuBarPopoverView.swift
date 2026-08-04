@@ -200,6 +200,7 @@ struct MenuBarPopoverView: View {
               service.applyLinkedFraction(linkedSliderValue)
             }
           }
+          .transaction { $0.animation = nil }
           Text("\(Int(linkedSliderValue * 100))%")
             .font(.system(.caption, design: .monospaced))
             .frame(width: 36, alignment: .trailing)
@@ -230,29 +231,18 @@ struct MenuBarPopoverView: View {
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       ForEach(service.fans) { fan in
-        HStack {
-          Text(L.fanLabel(fan.index))
-            .font(.caption)
-            .frame(width: 52, alignment: .leading)
-          Slider(
-            value: Binding(
-              get: { service.unlinkRPM[fan.index] ?? 0.3 },
-              set: { service.unlinkRPM[fan.index] = $0 }
-            ),
-            in: 0...1
-          ) { editing in
-            if !editing {
-              service.applyUnlinked(
-                fanIndex: fan.index,
-                fraction: service.unlinkRPM[fan.index] ?? 0.3
-              )
-            }
+        UnlinkedFanSliderRow(
+          fan: fan,
+          label: L.fanLabel(fan.index),
+          fraction: service.unlinkRPM[fan.index] ?? 0.3,
+          disabled: service.linkedEnabled,
+          onEditingChanged: { editing in
+            service.isDraggingSlider = editing
+          },
+          onCommit: { fraction in
+            service.applyUnlinked(fanIndex: fan.index, fraction: fraction)
           }
-          .disabled(service.linkedEnabled)
-          Text("\(Int(fan.actualRPM))")
-            .font(.system(.caption2, design: .monospaced))
-            .frame(width: 40, alignment: .trailing)
-        }
+        )
       }
     }
   }
@@ -309,5 +299,44 @@ struct MenuBarPopoverView: View {
     if c >= 90 { return .red }
     if c >= 75 { return .orange }
     return .primary
+  }
+}
+
+/// Keeps unlinked slider value in local state while dragging so `@Published`
+/// fan updates cannot rebuild the control on every thumb move.
+private struct UnlinkedFanSliderRow: View {
+  let fan: FanSnapshot
+  let label: String
+  let fraction: Double
+  let disabled: Bool
+  let onEditingChanged: (Bool) -> Void
+  let onCommit: (Double) -> Void
+
+  @State private var value: Double = 0.3
+  @State private var isDragging = false
+
+  var body: some View {
+    HStack {
+      Text(label)
+        .font(.caption)
+        .frame(width: 52, alignment: .leading)
+      Slider(value: $value, in: 0...1) { editing in
+        isDragging = editing
+        onEditingChanged(editing)
+        if !editing {
+          onCommit(value)
+        }
+      }
+      .disabled(disabled)
+      Text("\(Int(fan.actualRPM))")
+        .font(.system(.caption2, design: .monospaced))
+        .frame(width: 40, alignment: .trailing)
+    }
+    .onAppear { value = fraction }
+    .onChange(of: fraction) { _, newValue in
+      if !isDragging {
+        value = newValue
+      }
+    }
   }
 }
