@@ -165,7 +165,7 @@ struct MenuBarPopoverView: View {
     .accessibilityLabel(L.presetTitle(preset))
   }
 
-  /// Featured Smart control — tinted like a recommended system action, not a neon badge.
+  /// Featured Smart control — same idle chrome as other chips; accent only when selected.
   private var smartChip: some View {
     let selected = service.activePreset == .smart
     return Button {
@@ -175,19 +175,15 @@ struct MenuBarPopoverView: View {
         Image(systemName: "sparkles")
           .font(.system(size: 10, weight: .semibold))
         Text(L.presetTitle(.smart))
-          .font(.system(size: 11, weight: .semibold))
+          .font(.system(size: 11, weight: selected ? .semibold : .medium))
       }
-      .foregroundStyle(selected ? Color.white : Color.accentColor)
+      .foregroundStyle(selected ? Color.white : Color.primary.opacity(0.85))
       .frame(maxWidth: .infinity)
       .padding(.vertical, 8)
       .padding(.horizontal, 4)
       .background(
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .fill(selected ? Color.accentColor : Color.accentColor.opacity(0.12))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-          .strokeBorder(Color.accentColor.opacity(selected ? 0 : 0.28), lineWidth: 1)
+          .fill(selected ? Color.accentColor : Color.primary.opacity(0.05))
       )
       .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
