@@ -115,6 +115,28 @@ struct L10n {
   var safetyWarning: String {
     t("Temperature high — switched to Cool", "温度偏高，已切换强冷")
   }
+  var safetyBlockQuiet: String {
+    t(
+      "Too hot for Quiet (≥78°C) — use Balanced/Cool or Curve",
+      "温度过高不宜安静模式（≥78°C）— 请用均衡/强冷或曲线"
+    )
+  }
+  var safetyBlockBalanced: String {
+    t(
+      "Too hot for Balanced (≥85°C) — switched toward Cool",
+      "温度过高不宜均衡模式（≥85°C）— 已倾向强冷"
+    )
+  }
+  var safetyThermalFloor: String {
+    t(
+      "Fan speed raised to a safe minimum for current temperature",
+      "已按当前温度抬高到安全最低转速"
+    )
+  }
+  var launchAtLogin: String { t("Launch at Login", "登录时打开") }
+  var launchAtLoginFailed: String {
+    t("Could not change Launch at Login — check System Settings", "无法修改登录项 — 请检查系统设置")
+  }
   var ftstYes: String { t("yes", "有") }
   var ftstNo: String { t("no", "无") }
 
@@ -129,6 +151,7 @@ struct L10n {
     case .quiet: return t("Quiet", "安静")
     case .balanced: return t("Balanced", "均衡")
     case .cool: return t("Cool", "强冷")
+    case .curve: return t("Curve", "曲线")
     }
   }
 
@@ -150,6 +173,9 @@ struct L10n {
   }
   func linkedStatus(_ percent: Int) -> String {
     "\(linkedPercent) \(percent)%"
+  }
+  func curveStatus(_ celsius: Int, percent: Int) -> String {
+    t("Curve \(celsius)° → \(percent)%", "曲线 \(celsius)° → \(percent)%")
   }
   func fanRPMStatus(_ index: Int, rpm: Int) -> String {
     "\(fan) \(index): \(rpm) RPM"

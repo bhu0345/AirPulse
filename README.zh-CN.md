@@ -15,16 +15,21 @@
 
 - 原生 SwiftUI **菜单栏 Mac 风扇控制**，界面简洁
 - 联动主滑杆 + 预设，兼顾 MacBook Pro 噪音与散热
+- **曲线**模式：按温度自动调速
+- **登录时打开** + 记住上次预设 / 转速
+- 热安全：高温拦截安静/均衡、抬高最低转速、强冷 / 交还 Auto
 - 从 Apple **SMC** 读取 CPU / GPU / 电池温度；写转速需一次特权 Helper
 - 默认英语界面，应用内可切换 **English / 中文**
-- 退出恢复系统 Auto；过热保护；睡眠唤醒后重申手动设定
+- 退出恢复系统 Auto；睡眠唤醒后重申手动设定
 
 ## 功能
 
-- 菜单栏 popover：关键温度、联动主滑杆、自动 / 安静 / 均衡 / 强冷
+- 菜单栏 popover：关键温度、联动主滑杆、自动 / 安静 / 均衡 / 强冷 / 曲线
 - 可解除联动，分别控制左右风扇
 - Apple Silicon SMC（`F%dmd` / `F%dMd`，可选 `Ftst`）
 - CLI 探针：`airpulse-cli probe [--write]`
+- 连接 Helper 后预热（减轻首次切手动延迟）
+- 可选 Developer ID 公证脚本（`Scripts/sign-and-notarize.sh`）
 
 ## 下载
 

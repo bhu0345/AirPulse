@@ -142,6 +142,18 @@ public final class FanController: @unchecked Sendable {
       return .direct
     case .quiet, .balanced, .cool:
       return try setLinkedFraction(preset.speedFraction ?? 0.45)
+    case .curve:
+      let temp = maxPrimaryTemperature() ?? 60
+      let fraction = FanCurve.fraction(forCelsius: temp)
+      return try setLinkedFraction(fraction)
+    }
+  }
+
+  /// Switch fans to manual mode without changing current target RPM (warm-up).
+  public func warmupManualMode() throws {
+    let count = try fanCount()
+    for i in 0..<count {
+      _ = try enableManualMode(fanIndex: i)
     }
   }
 

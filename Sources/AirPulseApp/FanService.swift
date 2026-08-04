@@ -46,6 +46,16 @@ final class HelperXPCClient: @unchecked Sendable {
     }
   }
 
+  func openSMC(completion: @escaping @Sendable (Bool, String?) -> Void) {
+    let p = proxy { completion(false, "XPC disconnected") }
+    p?.openSMC(reply: completion)
+  }
+
+  func warmupManual(completion: @escaping @Sendable (Bool, String?) -> Void) {
+    let p = proxy { completion(false, "XPC disconnected") }
+    p?.warmupManual(reply: completion)
+  }
+
   func applyPreset(
     _ raw: String,
     completion: @escaping @Sendable (Bool, String?) -> Void
@@ -99,6 +109,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   @Published var safetyNotice: String?
   @Published var unlinkRPM: [Int: Double] = [:]
   @Published var isInstallingHelper = false
+  @Published var launchAtLoginEnabled = false
 
   /// While true, refresh must not overwrite the linked slider position.
   var isDraggingSlider = false
@@ -112,8 +123,14 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private var isStarted = false
   /// Bumps on every helper reconnect so stale disconnect/ping callbacks are ignored.
   private var helperGeneration = 0
+  private var didRestoreAfterConnect = false
+  private var lastCurveFraction: Double?
 
   private var L: L10n { L10n.current }
+
+  private var maxPrimaryTemp: Float? {
+    temperatures.map(\.celsius).max()
+  }
 
   private func onMain(_ body: @escaping @Sendable () -> Void) {
     if Thread.isMainThread {
@@ -123,8 +140,51 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
   }
 
+  private func persistSettings() {
+    let defaults = UserDefaults.standard
+    defaults.set(activePreset.rawValue, forKey: SettingsKeys.activePreset)
+    defaults.set(linkedFraction, forKey: SettingsKeys.linkedFraction)
+    defaults.set(linkedEnabled, forKey: SettingsKeys.linkedEnabled)
+    defaults.set(desiredManual, forKey: SettingsKeys.desiredManual)
+    defaults.set(launchAtLoginEnabled, forKey: SettingsKeys.launchAtLogin)
+  }
+
+  func persistLinkedEnabled() {
+    onMain { self.persistSettings() }
+  }
+
+  private func loadPersistedSettings() {
+    let defaults = UserDefaults.standard
+    if let raw = defaults.string(forKey: SettingsKeys.activePreset),
+      let preset = FanPreset(rawValue: raw)
+    {
+      activePreset = preset
+    }
+    if defaults.object(forKey: SettingsKeys.linkedFraction) != nil {
+      linkedFraction = defaults.double(forKey: SettingsKeys.linkedFraction)
+    }
+    if defaults.object(forKey: SettingsKeys.linkedEnabled) != nil {
+      linkedEnabled = defaults.bool(forKey: SettingsKeys.linkedEnabled)
+    }
+    desiredManual = defaults.bool(forKey: SettingsKeys.desiredManual)
+    launchAtLoginEnabled = LaunchAtLogin.isEnabled
+      || defaults.bool(forKey: SettingsKeys.launchAtLogin)
+  }
+
+  func setLaunchAtLogin(_ enabled: Bool) {
+    let ok = LaunchAtLogin.setEnabled(enabled)
+    onMain {
+      self.launchAtLoginEnabled = LaunchAtLogin.isEnabled
+      if !ok {
+        self.statusMessage = self.L.launchAtLoginFailed
+      }
+      self.persistSettings()
+    }
+  }
+
   func start() {
     if !isStarted {
+      loadPersistedSettings()
       onMain { self.statusMessage = self.L.readingSensors }
       openLocalRead()
       startPolling()
@@ -182,6 +242,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private func tryConnectHelper() {
     helperGeneration += 1
     let generation = helperGeneration
+    didRestoreAfterConnect = false
 
     xpc?.invalidate()
     let client = HelperXPCClient(machServiceName: AirPulseConfig.helperMachService)
@@ -198,6 +259,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
         guard let self, self.helperGeneration == generation else { return }
         self.canWrite = ok
         self.statusMessage = ok ? self.L.helperConnected : self.L.monitorMode
+        if ok {
+          self.warmupHelperThenRestore(generation: generation)
+        }
       }
     }
 
@@ -205,6 +269,25 @@ final class FanService: ObservableObject, @unchecked Sendable {
       guard let self, self.helperGeneration == generation, !self.canWrite else { return }
       self.statusMessage = self.L.monitorMode
     }
+  }
+
+  private func warmupHelperThenRestore(generation: Int) {
+    xpc?.openSMC { [weak self] _, _ in
+      self?.xpc?.warmupManual { [weak self] _, _ in
+        DispatchQueue.main.async {
+          guard let self, self.helperGeneration == generation else { return }
+          self.restorePersistedControlIfNeeded()
+        }
+      }
+    }
+  }
+
+  private func restorePersistedControlIfNeeded() {
+    guard canWrite, !didRestoreAfterConnect else { return }
+    didRestoreAfterConnect = true
+    guard desiredManual || activePreset == .curve else { return }
+    if activePreset == .auto { return }
+    applyPreset(activePreset, userInitiated: false)
   }
 
   func installHelper() {
@@ -394,15 +477,37 @@ final class FanService: ObservableObject, @unchecked Sendable {
     return false
   }
 
-  func applyPreset(_ preset: FanPreset) {
+  func applyPreset(_ preset: FanPreset, userInitiated: Bool = true) {
+    let maxTemp = maxPrimaryTemp
+    if userInitiated, safety.shouldBlock(preset: preset, maxTemp: maxTemp) {
+      onMain {
+        if preset == .quiet {
+          self.safetyNotice = self.L.safetyBlockQuiet
+          self.statusMessage = self.L.safetyBlockQuiet
+        } else {
+          self.safetyNotice = self.L.safetyBlockBalanced
+          self.statusMessage = self.L.safetyBlockBalanced
+        }
+      }
+      return
+    }
+
     onMain {
       self.activePreset = preset
       self.desiredManual = preset != .auto
       if let fraction = preset.speedFraction {
-        self.linkedFraction = fraction
+        let floored = max(fraction, self.safety.minimumFraction(forMaxTemp: maxTemp))
+        self.linkedFraction = floored
       }
+      self.persistSettings()
     }
     guard requireWriteAccess() else { return }
+
+    if preset == .curve {
+      applyCurveFraction(force: true)
+      return
+    }
+
     xpc?.applyPreset(preset.rawValue) { [weak self] ok, err in
       DispatchQueue.main.async {
         guard let self else { return }
@@ -413,17 +518,53 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   func applyLinkedFraction(_ fraction: Double) {
+    let floored = max(fraction, safety.minimumFraction(forMaxTemp: maxPrimaryTemp))
+    if floored > fraction + 0.01 {
+      onMain {
+        self.safetyNotice = self.L.safetyThermalFloor
+        self.statusMessage = self.L.safetyThermalFloor
+      }
+    }
     onMain {
-      self.linkedFraction = fraction
+      self.linkedFraction = floored
       self.activePreset = .balanced
       self.desiredManual = true
+      self.lastCurveFraction = nil
+      self.persistSettings()
     }
     guard requireWriteAccess() else { return }
-    xpc?.setLinkedFraction(fraction) { [weak self] ok, err in
+    xpc?.setLinkedFraction(floored) { [weak self] ok, err in
       DispatchQueue.main.async {
         guard let self else { return }
-        self.statusMessage = ok ? self.L.linkedStatus(Int(fraction * 100)) : (err ?? self.L.failed)
+        self.statusMessage = ok ? self.L.linkedStatus(Int(floored * 100)) : (err ?? self.L.failed)
         self.refresh()
+      }
+    }
+  }
+
+  private func applyCurveFraction(force: Bool = false) {
+    guard canWrite, activePreset == .curve else { return }
+    let temp = maxPrimaryTemp ?? localController?.maxPrimaryTemperature() ?? 60
+    var fraction = FanCurve.fraction(forCelsius: temp)
+    fraction = max(fraction, safety.minimumFraction(forMaxTemp: temp))
+    if !force, let last = lastCurveFraction, abs(last - fraction) < 0.02 {
+      return
+    }
+    lastCurveFraction = fraction
+    let applied = fraction
+    onMain {
+      self.linkedFraction = applied
+      self.desiredManual = true
+      self.persistSettings()
+    }
+    xpc?.setLinkedFraction(applied) { [weak self] ok, err in
+      DispatchQueue.main.async {
+        guard let self else { return }
+        if ok {
+          self.statusMessage = self.L.curveStatus(Int(temp), percent: Int(applied * 100))
+        } else {
+          self.statusMessage = err ?? self.L.failed
+        }
       }
     }
   }
@@ -432,6 +573,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
     onMain {
       self.unlinkRPM[fanIndex] = fraction
       self.desiredManual = true
+      self.persistSettings()
     }
     guard let fan = fans.first(where: { $0.index == fanIndex }) else { return }
     let rpm = fan.minRPM + Float(fraction) * (fan.maxRPM - fan.minRPM)
@@ -450,6 +592,8 @@ final class FanService: ObservableObject, @unchecked Sendable {
     onMain {
       self.activePreset = .auto
       self.desiredManual = false
+      self.lastCurveFraction = nil
+      self.persistSettings()
     }
     guard requireWriteAccess() else { return }
     xpc?.restoreAuto { [weak self] ok, err in
@@ -484,7 +628,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
     ) { [weak self] _ in
       guard let self, self.desiredManual, self.canWrite else { return }
       self.statusMessage = self.L.reassertAfterWake
-      if self.linkedEnabled {
+      if self.activePreset == .curve {
+        self.applyCurveFraction(force: true)
+      } else if self.linkedEnabled {
         self.applyLinkedFraction(self.linkedFraction)
       } else {
         for (index, fraction) in self.unlinkRPM {
@@ -503,9 +649,45 @@ final class FanService: ObservableObject, @unchecked Sendable {
       if desiredManual, canWrite { restoreAuto() }
     case .forceCool:
       safetyNotice = L.safetyWarning
-      if activePreset != .cool, canWrite { applyPreset(.cool) }
+      if activePreset != .cool, canWrite { applyPreset(.cool, userInitiated: false) }
+    case .escalateFromBalanced:
+      if activePreset == .quiet || activePreset == .balanced
+        || (desiredManual && linkedFraction < safety.minimumFraction(forMaxTemp: maxTemp))
+      {
+        safetyNotice = L.safetyBlockBalanced
+        if canWrite { applyPreset(.cool, userInitiated: false) }
+      } else if desiredManual {
+        let floor = safety.minimumFraction(forMaxTemp: maxTemp)
+        if linkedFraction + 0.01 < floor, canWrite {
+          safetyNotice = L.safetyThermalFloor
+          applyLinkedFraction(floor)
+        }
+      }
+    case .bumpFromQuiet:
+      if activePreset == .quiet {
+        safetyNotice = L.safetyBlockQuiet
+        if canWrite { applyPreset(.balanced, userInitiated: false) }
+      } else if desiredManual {
+        let floor = safety.minimumFraction(forMaxTemp: maxTemp)
+        if linkedFraction + 0.01 < floor, canWrite {
+          safetyNotice = L.safetyThermalFloor
+          applyLinkedFraction(floor)
+        }
+      }
     case .none:
-      safetyNotice = nil
+      if safetyNotice == L.safetyCritical || safetyNotice == L.safetyWarning
+        || safetyNotice == L.safetyBlockQuiet || safetyNotice == L.safetyBlockBalanced
+        || safetyNotice == L.safetyThermalFloor
+      {
+        // Keep notice until temps cool; clear only when fully safe.
+        if let maxTemp, maxTemp < AirPulseConfig.blockQuietCelsius {
+          safetyNotice = nil
+        }
+      }
+    }
+
+    if activePreset == .curve, canWrite, !isDraggingSlider {
+      applyCurveFraction(force: false)
     }
   }
 }

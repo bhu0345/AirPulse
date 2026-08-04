@@ -34,3 +34,21 @@
 - SwiftUI 菜单栏 App 可打包为 `.app`（见 `Scripts/build-app.sh`）。
 
 签名与 Xcode 就绪后，把 `CODE_SIGN_IDENTITY` / `DEVELOPMENT_TEAM` 写入 `Config/local.xcconfig`（可选，面向 Xcode 工程），或继续使用 LaunchDaemon 安装方式。
+
+## Gatekeeper / 公证（可选）
+
+本机若 **0 valid identities**，`Scripts/build-app.sh` 仍用 **ad-hoc** 签名（本机可用，首次需右键打开）。
+
+对外分发且希望双击即可打开，需要：
+
+1. Apple Developer Program + **Developer ID Application** 证书  
+2. `xcrun notarytool store-credentials …` 建好钥匙串 profile  
+3. 构建后运行：
+
+```bash
+./Scripts/build-app.sh
+./Scripts/sign-and-notarize.sh
+./Scripts/package-dmg.sh 0.2.0
+```
+
+无证书时脚本会直接报错并打印上述步骤，不会假装公证成功。

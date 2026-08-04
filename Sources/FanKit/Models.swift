@@ -76,6 +76,7 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
   case quiet
   case balanced
   case cool
+  case curve
 
   public var id: String { rawValue }
 
@@ -85,6 +86,7 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
     case .quiet: return "安静"
     case .balanced: return "均衡"
     case .cool: return "强冷"
+    case .curve: return "曲线"
     }
   }
 
@@ -94,13 +96,14 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
     case .quiet: return "Quiet"
     case .balanced: return "Balanced"
     case .cool: return "Cool"
+    case .curve: return "Curve"
     }
   }
 
-  /// Fraction of (min...max) range when not auto. Auto uses system control.
+  /// Fraction of (min...max) range when not auto. Auto / Curve use dynamic control.
   public var speedFraction: Double? {
     switch self {
-    case .auto: return nil
+    case .auto, .curve: return nil
     case .quiet: return 0.15
     case .balanced: return 0.45
     case .cool: return 0.85

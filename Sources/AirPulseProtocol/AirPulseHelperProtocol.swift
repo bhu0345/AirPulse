@@ -3,6 +3,7 @@ import Foundation
 @objc public protocol AirPulseHelperProtocol: NSObjectProtocol {
   func ping(reply: @escaping (String) -> Void)
   func openSMC(reply: @escaping (Bool, String?) -> Void)
+  func warmupManual(reply: @escaping (Bool, String?) -> Void)
   func listFans(reply: @escaping ([Data]?, String?) -> Void)
   func listTemperatures(reply: @escaping ([Data]?, String?) -> Void)
   func applyPreset(_ rawPreset: String, reply: @escaping (Bool, String?) -> Void)

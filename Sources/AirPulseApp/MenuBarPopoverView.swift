@@ -137,13 +137,13 @@ struct MenuBarPopoverView: View {
   }
 
   private var presetRow: some View {
-    HStack(spacing: 6) {
+    HStack(spacing: 4) {
       ForEach(FanPreset.allCases) { preset in
         Button {
           service.applyPreset(preset)
         } label: {
           Text(L.presetTitle(preset))
-            .font(.system(size: 12, weight: .medium))
+            .font(.system(size: 11, weight: .medium))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(
@@ -180,6 +180,7 @@ struct MenuBarPopoverView: View {
             set: { newValue in
               service.linkedEnabled = newValue
               if !newValue { showAdvanced = true }
+              service.persistLinkedEnabled()
             }
           )
         )
@@ -258,6 +259,25 @@ struct MenuBarPopoverView: View {
         .font(.caption2)
         .foregroundStyle(.secondary)
         .lineLimit(2)
+
+      if showAdvanced {
+        HStack {
+          Text(L.launchAtLogin)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          Spacer()
+          Toggle(
+            "",
+            isOn: Binding(
+              get: { service.launchAtLoginEnabled },
+              set: { service.setLaunchAtLogin($0) }
+            )
+          )
+          .labelsHidden()
+          .toggleStyle(.switch)
+          .controlSize(.small)
+        }
+      }
 
       HStack(spacing: 8) {
         Button(showAdvanced ? L.hideAdvanced : L.advanced) {

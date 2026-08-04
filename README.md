@@ -15,16 +15,21 @@
 
 - Native SwiftUI **menu-bar Mac fan control** — no Electron, no cluttered dashboard
 - Linked dual-fan slider + presets for everyday **MacBook Pro fan** noise/cooling tradeoffs
+- **Curve** mode: temperature → fan speed automatically
+- **Launch at Login** + remembers last preset / speed
+- Thermal safety: blocks Quiet/Balanced when hot; raises a minimum floor; Cool / Auto fallback
 - Reads CPU / GPU / battery temps from Apple **SMC**; writes fan targets through a one-time privileged helper
 - English UI by default, with in-app **English / 中文**
-- Restore system Auto on quit; overheat safety; re-assert after sleep/wake
+- Restore system Auto on quit; re-assert after sleep/wake
 
 ## Features
 
-- Menu-bar popover: key temperatures, master slider for fans on both sides, Auto / Quiet / Balanced / Cool
+- Menu-bar popover: key temperatures, master slider, Auto / Quiet / Balanced / Cool / Curve
 - Optional unlink for independent left/right control
 - Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)
 - CLI probe: `airpulse-cli probe [--write]`
+- Helper warm-up on connect (reduces first-write delay)
+- Optional Developer ID notarization script (`Scripts/sign-and-notarize.sh`)
 
 ## Download
 

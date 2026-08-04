@@ -63,6 +63,15 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
     }
   }
 
+  func warmupManual(reply: @escaping (Bool, String?) -> Void) {
+    do {
+      try ensureController().warmupManualMode()
+      reply(true, nil)
+    } catch {
+      reply(false, error.localizedDescription)
+    }
+  }
+
   func listFans(reply: @escaping ([Data]?, String?) -> Void) {
     do {
       let fans = try ensureController().allFans()
@@ -90,7 +99,12 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       let c = try ensureController()
       _ = try c.applyPreset(preset)
       desiredPreset = preset
-      desiredFraction = preset.speedFraction
+      if preset == .curve {
+        let temp = c.maxPrimaryTemperature() ?? 60
+        desiredFraction = FanCurve.fraction(forCelsius: temp)
+      } else {
+        desiredFraction = preset.speedFraction
+      }
       if preset == .auto {
         stopReassert()
       } else {
@@ -179,13 +193,43 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       desiredFraction = nil
       stopReassert()
       return
-    case .forceCool:
-      _ = try? c.applyPreset(.cool)
-      desiredFraction = FanPreset.cool.speedFraction
+    case .forceCool, .escalateFromBalanced:
+      if desiredPreset == .quiet || desiredPreset == .balanced
+        || (desiredPreset != .curve && (desiredFraction ?? 1) < safety.minimumFraction(forMaxTemp: maxTemp))
+      {
+        _ = try? c.applyPreset(.cool)
+        desiredPreset = .cool
+        desiredFraction = FanPreset.cool.speedFraction
+      } else if desiredPreset == .curve, safety.evaluate(maxTemp: maxTemp) == .forceCool {
+        _ = try? c.applyPreset(.cool)
+        desiredPreset = .cool
+        desiredFraction = FanPreset.cool.speedFraction
+      }
+    case .bumpFromQuiet:
+      if desiredPreset == .quiet {
+        _ = try? c.applyPreset(.balanced)
+        desiredPreset = .balanced
+        desiredFraction = FanPreset.balanced.speedFraction
+      }
+      let floor = safety.minimumFraction(forMaxTemp: maxTemp)
+      if let f = desiredFraction, f < floor {
+        desiredFraction = floor
+      }
     case .none:
       break
     }
-    if let fraction = desiredFraction {
+
+    if desiredPreset == .curve, let temp = maxTemp {
+      var fraction = FanCurve.fraction(forCelsius: temp)
+      fraction = max(fraction, safety.minimumFraction(forMaxTemp: maxTemp))
+      desiredFraction = fraction
+      _ = try? c.setLinkedFraction(fraction)
+      return
+    }
+
+    if var fraction = desiredFraction {
+      fraction = max(fraction, safety.minimumFraction(forMaxTemp: maxTemp))
+      desiredFraction = fraction
       _ = try? c.setLinkedFraction(fraction)
     }
   }
