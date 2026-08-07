@@ -16,7 +16,11 @@ struct MenuBarPopoverView: View {
       languageRow
       temperatureRow
       if !service.canWrite {
-        enableHelperBanner
+        if service.helperNeedsUpdate {
+          helperUpdateBanner
+        } else {
+          enableHelperBanner
+        }
       }
       presetRow
       linkedSlider
@@ -106,6 +110,30 @@ struct MenuBarPopoverView: View {
     .background(
       RoundedRectangle(cornerRadius: 10, style: .continuous)
         .fill(Color.accentColor.opacity(0.08))
+    )
+  }
+
+  private var helperUpdateBanner: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(L.helperNeedsUpdateHint)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      Button {
+        service.installHelper()
+      } label: {
+        Text(L.updateHelper)
+          .font(.system(size: 13, weight: .semibold))
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 8)
+      }
+      .buttonStyle(.borderedProminent)
+      .disabled(service.isInstallingHelper)
+    }
+    .padding(10)
+    .background(
+      RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .fill(Color.orange.opacity(0.12))
     )
   }
 

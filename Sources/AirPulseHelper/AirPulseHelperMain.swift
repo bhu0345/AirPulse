@@ -8,11 +8,13 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
 {
   private let listener: NSXPCListener
   private var controller: FanController?
-  private let safety = SafetyPolicy()
+  private var safety = SafetyPolicy()
   private var reassertTimer: DispatchSourceTimer?
   private var desiredFraction: Double?
   private var desiredPreset: FanPreset = .auto
   private let queue = DispatchQueue(label: "com.bingtaohu.AirPulse.helper")
+  private var connectionCount = 0
+  private let connectionLock = NSLock()
 
   init(machServiceName: String) {
     listener = NSXPCListener(machServiceName: machServiceName)
@@ -28,18 +30,43 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
 
   private func installSignalHandlers() {
     signal(SIGTERM) { _ in
-      // Best-effort restore; process is exiting.
+      // Best-effort; process is exiting. Prefer XPC disconnect restore.
     }
   }
-
   func listener(_ listener: NSXPCListener, shouldAcceptNewConnection newConnection: NSXPCConnection)
     -> Bool
   {
     newConnection.exportedInterface = NSXPCInterface(with: AirPulseHelperProtocol.self)
     newConnection.exportedObject = self
-    newConnection.invalidationHandler = {}
+    connectionLock.lock()
+    connectionCount += 1
+    connectionLock.unlock()
+    newConnection.invalidationHandler = { [weak self] in
+      self?.clientDisconnected()
+    }
     newConnection.resume()
     return true
+  }
+
+  private func clientDisconnected() {
+    queue.async { [weak self] in
+      guard let self else { return }
+      self.connectionLock.lock()
+      self.connectionCount = max(0, self.connectionCount - 1)
+      let remaining = self.connectionCount
+      self.connectionLock.unlock()
+      if remaining == 0 {
+        self.restoreIfNeededOnClientGone()
+      }
+    }
+  }
+
+  private func restoreIfNeededOnClientGone() {
+    guard desiredPreset != .auto || desiredFraction != nil else { return }
+    try? ensureController().restoreSystemControl()
+    desiredPreset = .auto
+    desiredFraction = nil
+    stopReassert()
   }
 
   private func ensureController() throws -> FanController {
@@ -51,7 +78,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   }
 
   func ping(reply: @escaping (String) -> Void) {
-    reply("pong")
+    reply("pong:\(AirPulseConfig.helperAPIVersion)")
   }
 
   func openSMC(reply: @escaping (Bool, String?) -> Void) {
@@ -197,7 +224,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       desiredPreset = .custom
       desiredFraction = FanPreset.emergencyCoolFraction
     case .raiseHighFloor, .raiseLowFloor:
-      let floor = safety.minimumFraction(forMaxTemp: maxTemp)
+      let floor = safety.minimumFraction()
       if let f = desiredFraction, f < floor {
         desiredFraction = floor
         if desiredPreset != .smart {
@@ -210,14 +237,14 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
 
     if desiredPreset == .smart, let temp = maxTemp {
       var fraction = FanCurve.fraction(forCelsius: temp)
-      fraction = max(fraction, safety.minimumFraction(forMaxTemp: maxTemp))
+      fraction = max(fraction, safety.minimumFraction())
       desiredFraction = fraction
       _ = try? c.setLinkedFraction(fraction)
       return
     }
 
     if var fraction = desiredFraction {
-      fraction = max(fraction, safety.minimumFraction(forMaxTemp: maxTemp))
+      fraction = max(fraction, safety.minimumFraction())
       desiredFraction = fraction
       _ = try? c.setLinkedFraction(fraction)
     }

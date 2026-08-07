@@ -30,12 +30,19 @@ final class HelperXPCClient: @unchecked Sendable {
   }
 
   func ping(completion: @escaping @Sendable (Bool) -> Void) {
-    let p = proxy { completion(false) }
+    pingRaw { reply in
+      completion(reply != nil)
+    }
+  }
+
+  /// Returns the raw ping payload (`pong` or `pong:<version>`).
+  func pingRaw(completion: @escaping @Sendable (String?) -> Void) {
+    let p = proxy { completion(nil) }
     guard let p else {
-      completion(false)
+      completion(nil)
       return
     }
-    p.ping { _ in completion(true) }
+    p.ping { reply in completion(reply) }
   }
 
   func listFans(completion: @escaping @Sendable ([FanSnapshot]) -> Void) {
@@ -110,14 +117,18 @@ final class FanService: ObservableObject, @unchecked Sendable {
   @Published var unlinkRPM: [Int: Double] = [:]
   @Published var isInstallingHelper = false
   @Published var launchAtLoginEnabled = false
+  @Published var helperNeedsUpdate = false
 
   /// While true, refresh must not overwrite the linked slider position.
   var isDraggingSlider = false
 
+  /// Used by AppDelegate to restore Auto on process termination.
+  nonisolated(unsafe) static weak var terminationTarget: FanService?
+
   private var xpc: HelperXPCClient?
   private var pollTimer: DispatchSourceTimer?
   private var localController: FanController?
-  private let safety = SafetyPolicy()
+  private var safety = SafetyPolicy()
   private var wakeObserver: NSObjectProtocol?
   private var desiredManual = false
   private var isStarted = false
@@ -125,6 +136,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private var helperGeneration = 0
   private var didRestoreAfterConnect = false
   private var lastCurveFraction: Double?
+  private var isRestoringForTerminate = false
 
   private var L: L10n { L10n.current }
 
@@ -189,6 +201,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   func start() {
+    FanService.terminationTarget = self
     if !isStarted {
       loadPersistedSettings()
       onMain { self.statusMessage = self.L.readingSensors }
@@ -205,20 +218,72 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   func stop() {
+    prepareToTerminate(waitSeconds: 1.5)
     pollTimer?.cancel()
     pollTimer = nil
     if let wakeObserver {
       NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
       self.wakeObserver = nil
     }
-    if desiredManual {
-      restoreAuto()
-    }
     helperGeneration += 1
     xpc?.invalidate()
     xpc = nil
     isStarted = false
-    onMain { self.canWrite = false }
+    onMain {
+      self.canWrite = false
+      self.helperNeedsUpdate = false
+    }
+  }
+
+  /// Best-effort restore Auto before the process exits (Quit or system terminate).
+  func prepareToTerminate(waitSeconds: TimeInterval = 1.5) {
+    guard !isRestoringForTerminate else { return }
+    isRestoringForTerminate = true
+    defer { isRestoringForTerminate = false }
+
+    guard desiredManual else {
+      onMain {
+        self.activePreset = .auto
+        self.desiredManual = false
+        self.persistSettings()
+      }
+      return
+    }
+
+    // Prefer XPC restore; Helper also restores when the last client disconnects.
+    if canWrite, let xpc {
+      let sem = DispatchSemaphore(value: 0)
+      xpc.restoreAuto { [weak self] ok, _ in
+        DispatchQueue.main.async {
+          guard let self else { return }
+          self.activePreset = .auto
+          self.desiredManual = false
+          self.safety.reset()
+          self.persistSettings()
+          if ok {
+            self.statusMessage = self.L.restoredAuto
+          }
+        }
+        sem.signal()
+      }
+      _ = sem.wait(timeout: .now() + waitSeconds)
+    } else {
+      onMain {
+        self.activePreset = .auto
+        self.desiredManual = false
+        self.safety.reset()
+        self.persistSettings()
+      }
+    }
+  }
+
+  private static func parseHelperVersion(_ reply: String) -> Int {
+    if reply.hasPrefix("pong:"), let v = Int(reply.dropFirst(5)) {
+      return v
+    }
+    // Legacy helpers answered plain "pong".
+    if reply == "pong" { return 1 }
+    return 0
   }
 
   func reloadLocalizedStrings() {
@@ -260,12 +325,23 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
     xpc = client
 
-    client.ping { [weak self] ok in
+    client.pingRaw { [weak self] reply in
       DispatchQueue.main.async {
         guard let self, self.helperGeneration == generation else { return }
-        self.canWrite = ok
-        self.statusMessage = ok ? self.L.helperConnected : self.L.monitorMode
-        if ok {
+        guard let reply else {
+          self.canWrite = false
+          self.helperNeedsUpdate = false
+          self.statusMessage = self.L.monitorMode
+          return
+        }
+        let version = Self.parseHelperVersion(reply)
+        let needsUpdate = version < AirPulseConfig.helperAPIVersion
+        self.helperNeedsUpdate = needsUpdate
+        self.canWrite = !needsUpdate
+        if needsUpdate {
+          self.statusMessage = self.L.helperNeedsUpdate
+        } else {
+          self.statusMessage = self.L.helperConnected
           self.warmupHelperThenRestore(generation: generation)
         }
       }
@@ -555,7 +631,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
     guard canWrite, activePreset == .smart else { return }
     let temp = maxPrimaryTemp ?? localController?.maxPrimaryTemperature() ?? 60
     var fraction = FanCurve.fraction(forCelsius: temp)
-    fraction = max(fraction, safety.minimumFraction(forMaxTemp: temp))
+    fraction = max(fraction, safety.minimumFraction())
     if !force, let last = lastCurveFraction, abs(last - fraction) < 0.02 {
       return
     }
@@ -602,6 +678,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       self.activePreset = .auto
       self.desiredManual = false
       self.lastCurveFraction = nil
+      self.safety.reset()
       self.persistSettings()
     }
     guard requireWriteAccess() else { return }
@@ -665,7 +742,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       }
     case .raiseHighFloor, .raiseLowFloor:
       if desiredManual {
-        let floor = safety.minimumFraction(forMaxTemp: maxTemp)
+        let floor = safety.minimumFraction()
         if linkedFraction + 0.01 < floor, canWrite {
           safetyNotice = L.safetyThermalFloor
           applyLinkedFraction(floor)
@@ -675,7 +752,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
       if safetyNotice == L.safetyCritical || safetyNotice == L.safetyWarning
         || safetyNotice == L.safetyThermalFloor
       {
-        if let maxTemp, maxTemp < AirPulseConfig.lowFloorCelsius {
+        let clearBelow =
+          AirPulseConfig.lowFloorCelsius - AirPulseConfig.safetyHysteresisCelsius
+        if let maxTemp, maxTemp < clearBelow {
           safetyNotice = nil
         }
       }

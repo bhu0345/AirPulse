@@ -37,6 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationWillTerminate(_ notification: Notification) {
-    // FanService.stop() is also called from the Quit button.
+    FanService.terminationTarget?.prepareToTerminate(waitSeconds: 1.5)
+  }
+
+  func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    false
   }
 }

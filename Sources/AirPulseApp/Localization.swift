@@ -91,6 +91,16 @@ struct L10n {
   var readingSensors: String { t("Reading sensors…", "读取传感器…") }
   var smcReadFailed: String { t("SMC read failed", "SMC 读取失败") }
   var helperConnected: String { t("Fan control ready", "风扇控制已就绪") }
+  var helperNeedsUpdate: String {
+    t("Helper update required", "需要更新系统助手")
+  }
+  var helperNeedsUpdateHint: String {
+    t(
+      "Your system helper is outdated. Tap Update Helper (one admin password) to keep Smart mode and safety features working.",
+      "系统助手版本过旧。请点「更新助手」（需一次管理员密码），以继续使用智能模式与安全功能。"
+    )
+  }
+  var updateHelper: String { t("Update Helper", "更新助手") }
   var monitorMode: String {
     t(
       "Monitoring only — enable fan control to change speeds",

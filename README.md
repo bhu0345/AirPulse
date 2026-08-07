@@ -49,12 +49,12 @@ Leaving fans too low under load can pack heat. AirPulse actively prevents that �
 
 | Threshold | Action |
 |-----------|--------|
-| **≥78°C** | Minimum floor ≈45% |
-| **≥85°C** | Minimum floor ≈70% |
+| **≥78°C** | Minimum floor ≈45% (drops only after cooling ~4°C) |
+| **≥85°C** | Minimum floor ≈70% (with hysteresis) |
 | **≥90°C** | Emergency cool ≈85% (or Smart map, whichever is higher) |
 | **≥100°C** | Hand control back to system **Auto** |
 
-Also: restore Auto on quit, re-assert after sleep/wake, and helper warm-up so the first manual write is less laggy.
+Also: restore Auto on quit / helper disconnect, helper API version check, re-assert after sleep/wake, and helper warm-up so the first manual write is less laggy.
 
 ## Download
 
