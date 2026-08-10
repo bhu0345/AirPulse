@@ -405,11 +405,12 @@ struct MenuBarPopoverView: View {
     }
   }
 
-  /// The panel is a borderless window with no background of its own, so this
-  /// fill has to be fully opaque or the desktop reads straight through it.
+  /// Frosted like a native menu-bar panel: vibrancy underneath, then a scrim
+  /// heavy enough that the desktop never reads through as legible content.
   private var popoverBackground: some View {
     ZStack {
-      Color(nsColor: .windowBackgroundColor)
+      VisualEffectBackdrop(material: .menu, cornerRadius: 12)
+      Color(nsColor: .windowBackgroundColor).opacity(0.4)
       LinearGradient(
         colors: [
           Color.accentColor.opacity(0.12),
@@ -425,6 +426,48 @@ struct MenuBarPopoverView: View {
     if c >= 90 { return .red }
     if c >= 75 { return .orange }
     return .primary
+  }
+}
+
+/// Behind-window vibrancy is composited by the window server, which ignores
+/// SwiftUI's `.clipShape`, so the rounded corners have to come from the
+/// material's own mask image or the blur renders as a square behind the panel.
+private struct VisualEffectBackdrop: NSViewRepresentable {
+  let material: NSVisualEffectView.Material
+  let cornerRadius: CGFloat
+
+  func makeNSView(context: Context) -> NSVisualEffectView {
+    let view = NSVisualEffectView()
+    view.material = material
+    view.blendingMode = .behindWindow
+    view.state = .active
+    view.isEmphasized = false
+    view.maskImage = Self.maskImage(cornerRadius: cornerRadius)
+    return view
+  }
+
+  func updateNSView(_ view: NSVisualEffectView, context: Context) {
+    view.material = material
+    view.maskImage = Self.maskImage(cornerRadius: cornerRadius)
+  }
+
+  private static func maskImage(cornerRadius: CGFloat) -> NSImage {
+    let edge = cornerRadius * 2 + 1
+    let image = NSImage(
+      size: NSSize(width: edge, height: edge),
+      flipped: false
+    ) { rect in
+      NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+      return true
+    }
+    image.capInsets = NSEdgeInsets(
+      top: cornerRadius,
+      left: cornerRadius,
+      bottom: cornerRadius,
+      right: cornerRadius
+    )
+    image.resizingMode = .stretch
+    return image
   }
 }
 
