@@ -70,10 +70,8 @@ struct L10n {
   var restoreAuto: String { t("Restore Auto", "恢复自动") }
   var quit: String { t("Quit", "退出") }
   var quitApp: String { t("Quit AirPulse", "退出 AirPulse") }
-  var quitHint: String {
-    t("Right-click the menu bar icon to quit", "右键点击菜单栏图标即可退出")
-  }
   var languageLabel: String { t("Language", "语言") }
+  var temperatureUnitLabel: String { t("Temperature", "温度单位") }
   var statusLabel: String { t("Status:", "状态：") }
   var enableFanControl: String { t("Enable Fan Control", "启用风扇控制") }
   var enableFanControlHint: String {
@@ -183,8 +181,8 @@ struct L10n {
   func linkedStatus(_ percent: Int) -> String {
     "\(linkedPercent) \(percent)%"
   }
-  func smartStatus(_ celsius: Int, percent: Int) -> String {
-    t("Smart \(celsius)° → \(percent)%", "智能 \(celsius)° → \(percent)%")
+  func smartStatus(_ temperature: String, percent: Int) -> String {
+    t("Smart \(temperature) → \(percent)%", "智能 \(temperature) → \(percent)%")
   }
   func fanRPMStatus(_ index: Int, rpm: Int) -> String {
     "\(fan) \(index): \(rpm) RPM"

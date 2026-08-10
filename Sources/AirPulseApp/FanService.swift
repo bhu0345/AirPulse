@@ -642,7 +642,8 @@ final class FanService: ObservableObject, @unchecked Sendable {
       DispatchQueue.main.async {
         guard let self else { return }
         if ok {
-          self.statusMessage = self.L.smartStatus(Int(temp), percent: Int(applied * 100))
+          self.statusMessage = self.L.smartStatus(
+            TemperatureUnit.cached.format(celsius: temp), percent: Int(applied * 100))
         } else {
           self.statusMessage = err ?? self.L.failed
         }

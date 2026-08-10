@@ -1,9 +1,11 @@
+import AppKit
 import FanKit
 import SwiftUI
 
 struct MenuBarPopoverView: View {
   @ObservedObject var service: FanService
   @ObservedObject private var languageStore = LanguageStore.shared
+  @ObservedObject private var unitStore = UnitStore.shared
   @State private var showAdvanced = false
   @State private var linkedSliderValue: Double = 0.3
   @State private var isDraggingLinked = false
@@ -34,6 +36,11 @@ struct MenuBarPopoverView: View {
     .padding(16)
     .frame(width: 340)
     .background(popoverBackground)
+    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .strokeBorder(Color.primary.opacity(0.08))
+    )
     .onAppear {
       linkedSliderValue = service.linkedFraction
     }
@@ -71,6 +78,7 @@ struct MenuBarPopoverView: View {
   private var advancedSection: some View {
     VStack(alignment: .leading, spacing: 10) {
       languageRow
+      temperatureUnitRow
       launchAtLoginRow
       Divider().opacity(0.4)
       HStack {
@@ -81,10 +89,6 @@ struct MenuBarPopoverView: View {
         .controlSize(.small)
         Spacer()
       }
-      Text(L.quitHint)
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
     }
     .padding(10)
     .background(
@@ -108,6 +112,23 @@ struct MenuBarPopoverView: View {
       )) {
         ForEach(AppLanguage.allCases) { lang in
           Text(lang.displayName).tag(lang)
+        }
+      }
+      .pickerStyle(.segmented)
+      .frame(width: 150)
+      .labelsHidden()
+    }
+  }
+
+  private var temperatureUnitRow: some View {
+    HStack {
+      Text(L.temperatureUnitLabel)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      Spacer()
+      Picker("", selection: $unitStore.unit) {
+        ForEach(TemperatureUnit.allCases) { unit in
+          Text(unit.displayName).tag(unit)
         }
       }
       .pickerStyle(.segmented)
@@ -190,7 +211,7 @@ struct MenuBarPopoverView: View {
           Text(L.sensorName(reading.name))
             .font(.caption2)
             .foregroundStyle(.secondary)
-          Text(String(format: "%.0f°", reading.celsius))
+          Text(unitStore.unit.format(celsius: reading.celsius))
             .font(.system(size: 20, weight: .medium, design: .rounded))
             .foregroundStyle(tempColor(reading.celsius))
         }
@@ -359,30 +380,45 @@ struct MenuBarPopoverView: View {
         .foregroundStyle(.secondary)
         .lineLimit(2)
 
-      Button {
-        withAnimation(.easeInOut(duration: 0.2)) { showAdvanced.toggle() }
-      } label: {
-        HStack(spacing: 4) {
-          Text(showAdvanced ? L.hideAdvanced : L.advanced)
-          Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
-            .font(.system(size: 8, weight: .semibold))
+      HStack {
+        Button {
+          showAdvanced.toggle()
+        } label: {
+          HStack(spacing: 4) {
+            Text(showAdvanced ? L.hideAdvanced : L.advanced)
+            Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
+              .font(.system(size: 8, weight: .semibold))
+          }
+          .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
+        .buttonStyle(.borderless)
+
+        Spacer()
+
+        Button(L.quit) {
+          service.stop()
+          NSApp.terminate(nil)
+        }
+        .buttonStyle(.borderless)
       }
-      .buttonStyle(.borderless)
       .font(.caption)
     }
   }
 
+  /// The panel is a borderless window with no background of its own, so this
+  /// fill has to be fully opaque or the desktop reads straight through it.
   private var popoverBackground: some View {
-    LinearGradient(
-      colors: [
-        Color(nsColor: .windowBackgroundColor),
-        Color.accentColor.opacity(0.06),
-      ],
-      startPoint: .topLeading,
-      endPoint: .bottomTrailing
-    )
+    ZStack {
+      Color(nsColor: .windowBackgroundColor)
+      LinearGradient(
+        colors: [
+          Color.accentColor.opacity(0.12),
+          Color.accentColor.opacity(0.02),
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+    }
   }
 
   private func tempColor(_ c: Float) -> Color {
