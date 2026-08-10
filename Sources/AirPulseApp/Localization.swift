@@ -69,6 +69,10 @@ struct L10n {
   var hideAdvanced: String { t("Hide advanced", "收起高级") }
   var restoreAuto: String { t("Restore Auto", "恢复自动") }
   var quit: String { t("Quit", "退出") }
+  var quitApp: String { t("Quit AirPulse", "退出 AirPulse") }
+  var quitHint: String {
+    t("Right-click the menu bar icon to quit", "右键点击菜单栏图标即可退出")
+  }
   var languageLabel: String { t("Language", "语言") }
   var statusLabel: String { t("Status:", "状态：") }
   var enableFanControl: String { t("Enable Fan Control", "启用风扇控制") }

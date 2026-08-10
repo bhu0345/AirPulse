@@ -58,7 +58,7 @@ Also: restore Auto on quit / helper disconnect, helper API version check, re-ass
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v0.2.0+**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v0.4.0**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**
@@ -73,6 +73,8 @@ Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (curren
 - Menu-bar popover: CPU / GPU / battery temps + linked master slider
 - Three presets: **Auto · Custom · Smart** (AirPulse Smart mode is visually highlighted)
 - Optional unlink for independent left/right fans
+- Set-and-forget controls (language, Launch at Login, Restore Auto) tucked under **Advanced**
+- Right-click the menu-bar icon for **Restore Auto** and **Quit**
 - Launch at Login + remembers last preset / speed
 - English UI by default, in-app **English / 中文**
 - Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)
@@ -97,7 +99,7 @@ Do not run another Mac fan control app at the same time — SMC writes will conf
 ## Architecture
 
 ```text
-AirPulse.app (SwiftUI MenuBarExtra)
+AirPulse.app (NSStatusItem + SwiftUI popover)
     ├─ reads: in-process SMCKit
     └─ writes: XPC → AirPulseHelper (LaunchDaemon)
 ```

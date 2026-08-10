@@ -122,9 +122,6 @@ final class FanService: ObservableObject, @unchecked Sendable {
   /// While true, refresh must not overwrite the linked slider position.
   var isDraggingSlider = false
 
-  /// Used by AppDelegate to restore Auto on process termination.
-  nonisolated(unsafe) static weak var terminationTarget: FanService?
-
   private var xpc: HelperXPCClient?
   private var pollTimer: DispatchSourceTimer?
   private var localController: FanController?
@@ -201,7 +198,6 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   func start() {
-    FanService.terminationTarget = self
     if !isStarted {
       loadPersistedSettings()
       onMain { self.statusMessage = self.L.readingSensors }

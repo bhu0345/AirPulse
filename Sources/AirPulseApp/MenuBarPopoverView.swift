@@ -13,7 +13,6 @@ struct MenuBarPopoverView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       header
-      languageRow
       temperatureRow
       if !service.canWrite {
         if service.helperNeedsUpdate {
@@ -27,12 +26,14 @@ struct MenuBarPopoverView: View {
       if showAdvanced || !service.linkedEnabled {
         unlinkedSection
       }
+      if showAdvanced {
+        advancedSection
+      }
       footer
     }
     .padding(16)
     .frame(width: 340)
     .background(popoverBackground)
-    .id(languageStore.language)
     .onAppear {
       linkedSliderValue = service.linkedFraction
     }
@@ -66,6 +67,32 @@ struct MenuBarPopoverView: View {
     }
   }
 
+  /// Everything that is set once and then forgotten lives behind “Advanced”.
+  private var advancedSection: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      languageRow
+      launchAtLoginRow
+      Divider().opacity(0.4)
+      HStack {
+        Button(L.restoreAuto) {
+          service.restoreAuto()
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        Spacer()
+      }
+      Text(L.quitHint)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .padding(10)
+    .background(
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .fill(Color.primary.opacity(0.04))
+    )
+  }
+
   private var languageRow: some View {
     HStack {
       Text(L.languageLabel)
@@ -84,8 +111,27 @@ struct MenuBarPopoverView: View {
         }
       }
       .pickerStyle(.segmented)
-      .frame(width: 180)
+      .frame(width: 150)
       .labelsHidden()
+    }
+  }
+
+  private var launchAtLoginRow: some View {
+    HStack {
+      Text(L.launchAtLogin)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      Spacer()
+      Toggle(
+        "",
+        isOn: Binding(
+          get: { service.launchAtLoginEnabled },
+          set: { service.setLaunchAtLogin($0) }
+        )
+      )
+      .labelsHidden()
+      .toggleStyle(.switch)
+      .controlSize(.small)
     }
   }
 
@@ -313,47 +359,18 @@ struct MenuBarPopoverView: View {
         .foregroundStyle(.secondary)
         .lineLimit(2)
 
-      if showAdvanced {
-        HStack {
-          Text(L.launchAtLogin)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-          Spacer()
-          Toggle(
-            "",
-            isOn: Binding(
-              get: { service.launchAtLoginEnabled },
-              set: { service.setLaunchAtLogin($0) }
-            )
-          )
-          .labelsHidden()
-          .toggleStyle(.switch)
-          .controlSize(.small)
+      Button {
+        withAnimation(.easeInOut(duration: 0.2)) { showAdvanced.toggle() }
+      } label: {
+        HStack(spacing: 4) {
+          Text(showAdvanced ? L.hideAdvanced : L.advanced)
+          Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
+            .font(.system(size: 8, weight: .semibold))
         }
+        .contentShape(Rectangle())
       }
-
-      HStack(spacing: 8) {
-        Button(showAdvanced ? L.hideAdvanced : L.advanced) {
-          withAnimation(.easeInOut(duration: 0.2)) { showAdvanced.toggle() }
-        }
-        .buttonStyle(.borderless)
-        .font(.caption)
-
-        Spacer()
-
-        Button(L.restoreAuto) {
-          service.restoreAuto()
-        }
-        .buttonStyle(.borderless)
-        .font(.caption)
-
-        Button(L.quit) {
-          service.stop()
-          NSApp.terminate(nil)
-        }
-        .buttonStyle(.borderless)
-        .font(.caption)
-      }
+      .buttonStyle(.borderless)
+      .font(.caption)
     }
   }
 
