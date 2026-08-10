@@ -110,7 +110,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
   @Published var linkedEnabled = true
   @Published var linkedFraction: Double = 0.3
   @Published var activePreset: FanPreset = .auto
-  @Published var statusMessage: String = L10n.current.connecting
+  @Published var statusMessage: String = L10n.current.connecting {
+    didSet { lastSmartReading = nil }
+  }
   @Published var canWrite = false
   @Published var hardwareSummary: String = ""
   @Published var safetyNotice: String?
@@ -134,6 +136,10 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private var didRestoreAfterConnect = false
   private var lastCurveFraction: Double?
   private var isRestoringForTerminate = false
+  /// Non-nil exactly while `statusMessage` shows the Smart readout, so the line
+  /// can be rebuilt when the unit or language changes. Any other status write
+  /// drops it through `statusMessage`'s observer.
+  private var lastSmartReading: (celsius: Float, percent: Int)?
 
   private var L: L10n { L10n.current }
 
@@ -284,9 +290,30 @@ final class FanService: ObservableObject, @unchecked Sendable {
 
   func reloadLocalizedStrings() {
     onMain {
-      self.statusMessage = self.canWrite ? self.L.helperConnected : self.L.monitorMode
+      if let reading = self.lastSmartReading {
+        self.setSmartStatus(celsius: reading.celsius, percent: reading.percent)
+      } else {
+        self.statusMessage = self.canWrite ? self.L.helperConnected : self.L.monitorMode
+      }
       self.updateHardwareSummary()
     }
+  }
+
+  /// Rebuilds the Smart readout in the current unit so the status line follows
+  /// the °C/°F switch instead of waiting for the next fan write.
+  func refreshStatusMessage() {
+    onMain {
+      guard let reading = self.lastSmartReading else { return }
+      self.setSmartStatus(celsius: reading.celsius, percent: reading.percent)
+    }
+  }
+
+  /// Caller must be on main. `statusMessage` goes first so its observer clears
+  /// the previous reading before the fresh one is stored.
+  private func setSmartStatus(celsius: Float, percent: Int) {
+    statusMessage = L.smartStatus(
+      TemperatureUnit.cached.format(celsius: celsius), percent: percent)
+    lastSmartReading = (celsius, percent)
   }
 
   private func updateHardwareSummary() {
@@ -642,8 +669,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       DispatchQueue.main.async {
         guard let self else { return }
         if ok {
-          self.statusMessage = self.L.smartStatus(
-            TemperatureUnit.cached.format(celsius: temp), percent: Int(applied * 100))
+          self.setSmartStatus(celsius: temp, percent: Int(applied * 100))
         } else {
           self.statusMessage = err ?? self.L.failed
         }

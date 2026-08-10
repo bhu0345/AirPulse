@@ -126,7 +126,13 @@ struct MenuBarPopoverView: View {
         .font(.caption)
         .foregroundStyle(.secondary)
       Spacer()
-      Picker("", selection: $unitStore.unit) {
+      Picker("", selection: Binding(
+        get: { unitStore.unit },
+        set: { newValue in
+          unitStore.unit = newValue
+          service.refreshStatusMessage()
+        }
+      )) {
         ForEach(TemperatureUnit.allCases) { unit in
           Text(unit.displayName).tag(unit)
         }
