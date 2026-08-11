@@ -58,7 +58,7 @@ Also: restore Auto on quit / helper disconnect, helper API version check, re-ass
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v0.5.2**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v0.5.3**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**

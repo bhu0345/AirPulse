@@ -411,21 +411,10 @@ struct MenuBarPopoverView: View {
     }
   }
 
-  /// Frosted like a native menu-bar panel: vibrancy underneath, then a scrim
-  /// heavy enough that the desktop never reads through as legible content.
+  /// Nothing but the system menu material, so the panel reads exactly like a
+  /// native menu. Any scrim or tint on top of it is what made this look muddy.
   private var popoverBackground: some View {
-    ZStack {
-      VisualEffectBackdrop(material: .menu, cornerRadius: 12)
-      Color(nsColor: .windowBackgroundColor).opacity(0.4)
-      LinearGradient(
-        colors: [
-          Color.accentColor.opacity(0.12),
-          Color.accentColor.opacity(0.02),
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      )
-    }
+    VisualEffectBackdrop(material: .menu, cornerRadius: 12)
   }
 
   private func tempColor(_ c: Float) -> Color {
