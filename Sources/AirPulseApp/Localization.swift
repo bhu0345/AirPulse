@@ -140,6 +140,17 @@ struct L10n {
   var launchAtLoginFailed: String {
     t("Could not change Launch at Login — check System Settings", "无法修改登录项 — 请检查系统设置")
   }
+  var backgroundLabel: String { t("Background", "背景") }
+
+  func backgroundThemeName(_ theme: PanelBackgroundTheme) -> String {
+    switch theme {
+    case .clear: return t("Clear", "透明")
+    case .graphite: return t("Graphite", "石墨")
+    case .blue: return t("Blue", "蓝色")
+    case .purple: return t("Purple", "紫色")
+    case .mint: return t("Mint", "青绿")
+    }
+  }
   var smartHelp: String {
     t(
       "AirPulse Smart mode: fan speed follows temperature automatically — recommended daily mode",

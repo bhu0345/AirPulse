@@ -6,6 +6,7 @@ struct MenuBarPopoverView: View {
   @ObservedObject var service: FanService
   @ObservedObject private var languageStore = LanguageStore.shared
   @ObservedObject private var unitStore = UnitStore.shared
+  @ObservedObject private var backgroundStore = PanelBackgroundStore.shared
   @State private var showAdvanced = false
   @State private var linkedSliderValue: Double = 0.3
   @State private var isDraggingLinked = false
@@ -80,6 +81,7 @@ struct MenuBarPopoverView: View {
       languageRow
       temperatureUnitRow
       launchAtLoginRow
+      backgroundRow
       Divider().opacity(0.4)
       HStack {
         Button(L.restoreAuto) {
@@ -160,6 +162,62 @@ struct MenuBarPopoverView: View {
       .toggleStyle(.switch)
       .controlSize(.small)
     }
+  }
+
+  private var backgroundRow: some View {
+    HStack(alignment: .center) {
+      Text(L.backgroundLabel)
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      Spacer()
+      HStack(spacing: 8) {
+        ForEach(PanelBackgroundTheme.allCases) { theme in
+          backgroundSwatch(theme)
+        }
+      }
+    }
+  }
+
+  private func backgroundSwatch(_ theme: PanelBackgroundTheme) -> some View {
+    let selected = backgroundStore.theme == theme
+    return Button {
+      withAnimation(.easeInOut(duration: 0.18)) {
+        backgroundStore.theme = theme
+      }
+    } label: {
+      ZStack {
+        Circle()
+          .fill(
+            LinearGradient(
+              colors: theme == .clear
+                ? [Color.primary.opacity(0.06), Color.primary.opacity(0.02)]
+                : [theme.swatchColor.opacity(0.95), theme.swatchColor.opacity(0.75)],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
+          )
+          .frame(width: 20, height: 20)
+          .overlay(
+            Circle()
+              .strokeBorder(Color.primary.opacity(0.14), lineWidth: 0.5)
+          )
+        if selected {
+          Image(systemName: "checkmark")
+            .font(.system(size: 8, weight: .bold))
+            .foregroundStyle(theme.prefersLightCheckmark ? Color.white : Color.primary.opacity(0.85))
+        }
+      }
+      .frame(width: 26, height: 26)
+      .overlay(
+        Circle()
+          .strokeBorder(selected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+      )
+      .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .help(L.backgroundThemeName(theme))
+    .accessibilityLabel(L.backgroundThemeName(theme))
+    .accessibilityAddTraits(selected ? .isSelected : [])
   }
 
   private var enableHelperBanner: some View {
@@ -411,10 +469,15 @@ struct MenuBarPopoverView: View {
     }
   }
 
-  /// Nothing but the system menu material, so the panel reads exactly like a
-  /// native menu. Any scrim or tint on top of it is what made this look muddy.
+  /// System menu vibrancy, with an optional Apple-style wash from Advanced.
   private var popoverBackground: some View {
-    VisualEffectBackdrop(material: .menu, cornerRadius: 12)
+    ZStack {
+      VisualEffectBackdrop(material: .menu, cornerRadius: 12)
+      if let tint = backgroundStore.theme.tint {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .fill(tint)
+      }
+    }
   }
 
   private func tempColor(_ c: Float) -> Color {

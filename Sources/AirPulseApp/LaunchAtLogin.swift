@@ -28,4 +28,5 @@ enum SettingsKeys {
   static let linkedEnabled = "airpulse.linkedEnabled"
   static let desiredManual = "airpulse.desiredManual"
   static let launchAtLogin = "airpulse.launchAtLogin"
+  static let panelBackground = "airpulse.panelBackground"
 }
