@@ -115,6 +115,8 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
   @Published var canWrite = false
   @Published var hardwareSummary: String = ""
+  /// Nil until SMC has been probed. 0 = fanless (e.g. MacBook Air).
+  @Published var discoveredFanCount: Int?
   @Published var safetyNotice: String?
   @Published var unlinkRPM: [Int: Double] = [:]
   @Published var isInstallingHelper = false
@@ -140,6 +142,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   /// can be rebuilt when the unit or language changes. Any other status write
   /// drops it through `statusMessage`'s observer.
   private var lastSmartReading: (celsius: Float, percent: Int)?
+  private let cpuBrandName = SMCConnection.cpuBrand()
 
   private var L: L10n { L10n.current }
 
@@ -319,8 +322,14 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private func updateHardwareSummary() {
     guard let c = localController else { return }
     let count = (try? c.fanCount()) ?? fans.count
-    let summary = L.hardwareSummary(fanCount: count)
-    onMain { self.hardwareSummary = summary }
+    let summary = L.hardwareSummary(fanCount: count, chip: cpuBrandName)
+    onMain {
+      self.discoveredFanCount = count
+      if count <= 1, self.linkedEnabled == false {
+        self.linkedEnabled = true
+      }
+      self.hardwareSummary = summary
+    }
   }
 
   private func openLocalRead() {
@@ -544,11 +553,19 @@ final class FanService: ObservableObject, @unchecked Sendable {
       let newFans = (try? c.allFans()) ?? []
       let temps = c.readTemperatures(primaryOnly: true)
       let count = (try? c.fanCount()) ?? newFans.count
-      let summary = L.hardwareSummary(fanCount: count)
+      let summary = L.hardwareSummary(fanCount: count, chip: cpuBrandName)
 
       onMain {
         guard !self.isDraggingSlider else { return }
-        if !newFans.isEmpty, newFans != self.fans { self.fans = newFans }
+        self.discoveredFanCount = count
+        if count <= 1, self.linkedEnabled == false {
+          self.linkedEnabled = true
+        }
+        if count == 0 {
+          if !self.fans.isEmpty { self.fans = [] }
+        } else if !newFans.isEmpty, newFans != self.fans {
+          self.fans = newFans
+        }
         if temps != self.temperatures { self.temperatures = temps }
         if summary != self.hardwareSummary { self.hardwareSummary = summary }
         if self.unlinkRPM.isEmpty {

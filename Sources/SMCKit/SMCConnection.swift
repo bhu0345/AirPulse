@@ -170,11 +170,29 @@ public final class SMCConnection: @unchecked Sendable {
   }
 
   public static func hardwareModel() -> String {
+    sysctlString("hw.model")
+  }
+
+  /// e.g. "Apple M5 Pro", "Apple M4". Empty if unavailable.
+  public static func cpuBrand() -> String {
+    sysctlString("machdep.cpu.brand_string")
+  }
+
+  public static var isAppleSilicon: Bool {
+    #if arch(arm64)
+      true
+    #else
+      false
+    #endif
+  }
+
+  private static func sysctlString(_ name: String) -> String {
     var size = 0
-    sysctlbyname("hw.model", nil, &size, nil, 0)
-    var model = [CChar](repeating: 0, count: size)
-    sysctlbyname("hw.model", &model, &size, nil, 0)
-    return String(bytes: model.prefix { $0 != 0 }.map { UInt8($0) }, encoding: .utf8) ?? ""
+    sysctlbyname(name, nil, &size, nil, 0)
+    guard size > 0 else { return "" }
+    var buf = [CChar](repeating: 0, count: size)
+    sysctlbyname(name, &buf, &size, nil, 0)
+    return String(bytes: buf.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, encoding: .utf8) ?? ""
   }
 
   public func fourCharCode(from string: String) throws -> UInt32 {

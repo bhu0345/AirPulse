@@ -7,6 +7,7 @@ struct MenuBarPopoverView: View {
   @ObservedObject private var languageStore = LanguageStore.shared
   @ObservedObject private var unitStore = UnitStore.shared
   @ObservedObject private var backgroundStore = PanelBackgroundStore.shared
+  @StateObject private var updateChecker = UpdateChecker()
   @State private var showAdvanced = false
   @State private var linkedSliderValue: Double = 0.3
   @State private var isDraggingLinked = false
@@ -17,17 +18,21 @@ struct MenuBarPopoverView: View {
     VStack(alignment: .leading, spacing: 14) {
       header
       temperatureRow
-      if !service.canWrite {
+      if !service.canWrite, service.discoveredFanCount != 0 {
         if service.helperNeedsUpdate {
           helperUpdateBanner
         } else {
           enableHelperBanner
         }
       }
-      presetRow
-      linkedSlider
-      if showAdvanced || !service.linkedEnabled {
-        unlinkedSection
+      if service.discoveredFanCount == 0 {
+        fanlessBanner
+      } else {
+        presetRow
+        linkedSlider
+        if (showAdvanced || !service.linkedEnabled) && hasMultipleFans {
+          unlinkedSection
+        }
       }
       if showAdvanced {
         advancedSection
@@ -75,6 +80,15 @@ struct MenuBarPopoverView: View {
     }
   }
 
+  private var hasMultipleFans: Bool {
+    (service.discoveredFanCount ?? service.fans.count) > 1
+  }
+
+  private var linkedSliderTitle: String {
+    if !hasMultipleFans { return L.fanSpeed }
+    return service.linkedEnabled ? L.fansLinked : L.fansUnlinked
+  }
+
   /// Everything that is set once and then forgotten lives behind “Advanced”.
   private var advancedSection: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -82,6 +96,8 @@ struct MenuBarPopoverView: View {
       temperatureUnitRow
       launchAtLoginRow
       backgroundRow
+      Divider().opacity(0.4)
+      updatesRow
       Divider().opacity(0.4)
       HStack {
         Button(L.restoreAuto) {
@@ -96,6 +112,99 @@ struct MenuBarPopoverView: View {
     .background(
       RoundedRectangle(cornerRadius: 12, style: .continuous)
         .fill(Color.primary.opacity(0.04))
+    )
+    .onAppear {
+      if case .idle = updateChecker.state {
+        updateChecker.check()
+      }
+    }
+  }
+
+  private var updatesRow: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text(L.updatesLabel)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Spacer()
+        Text("v\(UpdateChecker.currentVersion)")
+          .font(.caption2.monospacedDigit())
+          .foregroundStyle(.tertiary)
+      }
+
+      Text(updateStatusText)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      updateActionButton
+    }
+  }
+
+  private var updateStatusText: String {
+    switch updateChecker.state {
+    case .idle:
+      return L.currentVersion(UpdateChecker.currentVersion)
+    case .checking:
+      return L.checkingUpdates
+    case .upToDate:
+      return L.upToDate
+    case .ahead(_, let latest):
+      return L.newerThanRelease("v\(latest)")
+    case .available(let latest, _, _):
+      return L.updateAvailable(latest)
+    case .downloading:
+      return L.downloadingUpdate
+    case .installed:
+      return L.updateOpenedDMG
+    case .failed(let message):
+      return "\(L.updateCheckFailed): \(message)"
+    }
+  }
+
+  @ViewBuilder
+  private var updateActionButton: some View {
+    switch updateChecker.state {
+    case .available:
+      Button {
+        updateChecker.downloadUpdate()
+      } label: {
+        Text(L.downloadUpdate)
+          .font(.system(size: 12, weight: .semibold))
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 6)
+      }
+      .buttonStyle(.borderedProminent)
+      .controlSize(.small)
+    case .checking, .downloading:
+      HStack {
+        ProgressView()
+          .controlSize(.small)
+        Spacer()
+      }
+    default:
+      Button(updateChecker.state == .idle ? L.checkForUpdates : L.checkAgain) {
+        updateChecker.check()
+      }
+      .buttonStyle(.bordered)
+      .controlSize(.small)
+    }
+  }
+
+  private var fanlessBanner: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text(L.noFansTitle)
+        .font(.caption.weight(.semibold))
+      Text(L.noFansHint)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(10)
+    .background(
+      RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .fill(Color.primary.opacity(0.05))
     )
   }
 
@@ -354,24 +463,26 @@ struct MenuBarPopoverView: View {
   private var linkedSlider: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Text(service.linkedEnabled ? L.fansLinked : L.fansUnlinked)
+        Text(linkedSliderTitle)
           .font(.subheadline.weight(.medium))
         Spacer()
-        Toggle(
-          "",
-          isOn: Binding(
-            get: { service.linkedEnabled },
-            set: { newValue in
-              service.linkedEnabled = newValue
-              if !newValue { showAdvanced = true }
-              service.persistLinkedEnabled()
-            }
+        if hasMultipleFans {
+          Toggle(
+            "",
+            isOn: Binding(
+              get: { service.linkedEnabled },
+              set: { newValue in
+                service.linkedEnabled = newValue
+                if !newValue { showAdvanced = true }
+                service.persistLinkedEnabled()
+              }
+            )
           )
-        )
-        .labelsHidden()
-        .toggleStyle(.switch)
-        .controlSize(.small)
-        .help(L.unlinkHelp)
+          .labelsHidden()
+          .toggleStyle(.switch)
+          .controlSize(.small)
+          .help(L.unlinkHelp)
+        }
       }
 
       if service.linkedEnabled {

@@ -58,10 +58,18 @@ struct L10n {
   var writable: String { t("Writable", "可写入") }
   var readOnlyNeedAuth: String { t("Read-only / needs authorization", "只读 / 需授权") }
   var readingTemps: String { t("Reading temperatures…", "温度读取中…") }
-  var fansLinked: String { t("Fans on both sides", "左右风扇联动") }
+  var fanSpeed: String { t("Fan speed", "风扇转速") }
+  var fansLinked: String { t("Linked fans", "风扇联动") }
   var fansUnlinked: String { t("Independent control", "已解除联动") }
   var unlinkHelp: String {
-    t("Turn off to control left and right fans separately", "关闭后可分别调节左右风扇")
+    t("Turn off to control each fan separately", "关闭后可分别调节各风扇")
+  }
+  var noFansTitle: String { t("No fans on this Mac", "这台 Mac 没有风扇") }
+  var noFansHint: String {
+    t(
+      "Fanless M-series Macs (such as MacBook Air) can still show temperatures.",
+      "无风扇的 M 系列 Mac（例如 MacBook Air）仍可查看温度。"
+    )
   }
   var perFanControl: String { t("Per-fan control", "分别控制") }
   var fan: String { t("Fan", "风扇") }
@@ -141,6 +149,32 @@ struct L10n {
     t("Could not change Launch at Login — check System Settings", "无法修改登录项 — 请检查系统设置")
   }
   var backgroundLabel: String { t("Background", "背景") }
+  var updatesLabel: String { t("Updates", "更新") }
+  var checkForUpdates: String { t("Check for Updates", "检查更新") }
+  var checkAgain: String { t("Check Again", "重新检查") }
+  var checkingUpdates: String { t("Checking…", "正在检查…") }
+  var upToDate: String { t("You're up to date", "已是最新版本") }
+  var downloadUpdate: String { t("Download Update", "下载更新") }
+  var downloadingUpdate: String { t("Downloading…", "正在下载…") }
+  var updateCheckFailed: String { t("Could not check for updates", "无法检查更新") }
+  var updateOpenedDMG: String {
+    t(
+      "Opened the installer — drag AirPulse into Applications to finish.",
+      "已打开安装盘，请将 AirPulse 拖到「应用程序」完成更新。"
+    )
+  }
+
+  func currentVersion(_ version: String) -> String {
+    t("Current version \(version)", "当前版本 \(version)")
+  }
+
+  func updateAvailable(_ version: String) -> String {
+    t("Version \(version) is available", "发现新版本 \(version)")
+  }
+
+  func newerThanRelease(_ latest: String) -> String {
+    t("This build is newer than \(latest)", "当前版本新于 \(latest)")
+  }
 
   func backgroundThemeName(_ theme: PanelBackgroundTheme) -> String {
     switch theme {
@@ -160,9 +194,15 @@ struct L10n {
   var ftstYes: String { t("yes", "有") }
   var ftstNo: String { t("no", "无") }
 
-  func hardwareSummary(fanCount: Int) -> String {
-    let fansWord = t("fans", "个风扇")
-    return "\(fanCount) \(fansWord)"
+  func hardwareSummary(fanCount: Int, chip: String) -> String {
+    let name = chip.isEmpty ? t("Apple Silicon", "Apple 芯片") : chip
+    if fanCount <= 0 {
+      return t("\(name) · no fans", "\(name) · 无风扇")
+    }
+    if fanCount == 1 {
+      return t("\(name) · 1 fan", "\(name) · 1 个风扇")
+    }
+    return t("\(name) · \(fanCount) fans", "\(name) · \(fanCount) 个风扇")
   }
 
   func presetTitle(_ preset: FanPreset) -> String {

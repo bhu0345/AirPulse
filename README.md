@@ -1,14 +1,29 @@
-# AirPulse — Mac Fan Control for MacBook Pro
+# AirPulse — Mac Fan Control for Apple Silicon
 
 <p align="center">
   <img src="Resources/AppIcon-256.png" width="128" height="128" alt="AirPulse icon" />
 </p>
 
-**AirPulse** is a free, open-source **Mac fan control** app for macOS. Menu-bar temperatures, linked dual-fan control, and **AirPulse Smart mode** that reacts to heat *before* your MacBook turns into a jet engine.
+**AirPulse** is a free, open-source **Mac fan control** app for macOS. Menu-bar temperatures, linked fan control, and **AirPulse Smart mode** that reacts to heat *before* your Mac turns into a jet engine.
 
-Built for **Apple Silicon** MacBook / MacBook Pro (M-series). Fans on both sides stay linked by default.
+Built for **Apple Silicon (M-series)** Macs with fans — MacBook Pro, Mac mini, Mac Studio, Mac Pro, and iMac. Fan count and sensors are detected at runtime, so one-fan desktops and dual-fan laptops use the same app. Fanless models (MacBook Air) can still show temperatures.
 
 > 中文说明见 [README.zh-CN.md](README.zh-CN.md).
+
+## Supported Macs
+
+AirPulse talks to the Apple Silicon SMC. It is not tied to one chassis:
+
+| Mac | Fans | What you get |
+|-----|------|----------------|
+| **MacBook Pro** (M1 and later) | 1–2 | Linked control (unlink in Advanced if you need per-fan) |
+| **Mac mini** (M1 and later) | 1 | Single-fan speed + Smart / Custom / Auto |
+| **Mac Studio** | 1+ | Same linked control across whatever SMC reports |
+| **Mac Pro** (M-series) | multiple | Linked across all fans |
+| **iMac** (M-series) | 1+ | Same as other M-series desktops |
+| **MacBook Air** | none | Temperatures only — nothing to control |
+
+Intel Macs are not a target. Developed on MacBook Pro (M5 Pro); Mini / Studio / Pro use the same SMC fan keys (`FNum`, `F%dTg`, `F%dmd` / `F%dMd`).
 
 ## Modes
 
@@ -58,7 +73,7 @@ Also: restore Auto on quit / helper disconnect, helper API version check, re-ass
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.0**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.1**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**
@@ -66,14 +81,16 @@ Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (curren
 4. Tap **Enable Fan Control** once (admin password)
 5. Choose **AirPulse Smart mode** for everyday use — or **Custom** / **Auto**
 
+In **Advanced**, tap **Check for Updates** to see if a newer release is available and download it.
+
 > Unsigned build first open: right-click → **Open**, or allow under **System Settings → Privacy & Security**.
 
 ## Features
 
-- Menu-bar popover: CPU / GPU / battery temps + linked master slider
+- Menu-bar popover: CPU / GPU / battery (or memory on desktops) + linked speed slider
 - Three presets: **Auto · Custom · Smart** (AirPulse Smart mode is visually highlighted)
-- Optional unlink for independent left/right fans
-- Set-and-forget controls (language, **°C / °F**, Launch at Login, frosted **background** tint, Restore Auto) tucked under **Advanced**
+- Multi-fan Macs: optional unlink for independent per-fan control
+- Set-and-forget controls (language, **°C / °F**, Launch at Login, frosted **background** tint, **Check for Updates**, Restore Auto) tucked under **Advanced**
 - Right-click the menu-bar icon for **Restore Auto** and **Quit**
 - Launch at Login + remembers last preset / speed
 - English UI by default, in-app **English / 中文**
@@ -112,4 +129,4 @@ Manual fan control can affect cooling, noise, and hardware longevity. AirPulse�
 
 ## Keywords
 
-`mac fan control` · `macbook fan control` · `AirPulse Smart mode` · `macos fan controller` · `apple silicon fan` · `smc fan control` · `menu bar fan app`
+`mac fan control` · `m-series fan control` · `mac mini fan` · `mac studio fan` · `macbook fan control` · `AirPulse Smart mode` · `macos fan controller` · `apple silicon fan` · `smc fan control` · `menu bar fan app`

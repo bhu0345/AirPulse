@@ -116,21 +116,33 @@ public enum SensorCatalog {
     public let isPrimary: Bool
   }
 
-  /// M5-focused primary keys + common fallbacks. Probed at runtime.
+  /// Apple Silicon keys across MacBook Pro, Mac mini, Mac Studio, Mac Pro.
+  /// First hit per display name wins; missing keys (e.g. battery on desktops) are skipped.
   public static let candidates: [SensorDef] = [
     .init(key: "Tp0O", name: "CPU", isPrimary: true),
     .init(key: "Tp01", name: "CPU", isPrimary: true),
+    .init(key: "Tp05", name: "CPU", isPrimary: true),
+    .init(key: "Tp09", name: "CPU", isPrimary: true),
+    .init(key: "Tp0b", name: "CPU", isPrimary: true),
+    .init(key: "Tp0D", name: "CPU", isPrimary: true),
+    .init(key: "Tp0P", name: "CPU", isPrimary: true),
+    .init(key: "Tp0L", name: "CPU", isPrimary: true),
+    .init(key: "Tp0H", name: "CPU", isPrimary: true),
     .init(key: "TC0P", name: "CPU", isPrimary: true),
     .init(key: "Tg0U", name: "GPU", isPrimary: true),
     .init(key: "Tg05", name: "GPU", isPrimary: true),
+    .init(key: "Tg0P", name: "GPU", isPrimary: true),
+    .init(key: "Tg0D", name: "GPU", isPrimary: true),
+    .init(key: "Tg0L", name: "GPU", isPrimary: true),
     .init(key: "TG0P", name: "GPU", isPrimary: true),
     .init(key: "TB1T", name: "Battery", isPrimary: true),
     .init(key: "TB0T", name: "Battery", isPrimary: true),
+    .init(key: "Tm0p", name: "Memory", isPrimary: true),
+    .init(key: "Tm0P", name: "Memory", isPrimary: true),
     .init(key: "Tp00", name: "CPU S1", isPrimary: false),
     .init(key: "Tp04", name: "CPU S2", isPrimary: false),
     .init(key: "Tp08", name: "CPU S3", isPrimary: false),
     .init(key: "Tg0X", name: "GPU 2", isPrimary: false),
     .init(key: "Tg0d", name: "GPU 3", isPrimary: false),
-    .init(key: "Tm0p", name: "Memory", isPrimary: false),
   ]
 }

@@ -110,6 +110,7 @@ public final class FanController: @unchecked Sendable {
   }
 
   /// Set all fans to the same normalized fraction of each fan's min...max range.
+  /// Works for 1 fan (Mac mini / some Studio) as well as dual-fan laptops.
   public func setLinkedFraction(_ fraction: Double) throws -> FanControlStrategy {
     let fans = try allFans()
     guard let first = fans.first else { return .direct }

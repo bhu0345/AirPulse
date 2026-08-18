@@ -1,14 +1,29 @@
-# AirPulse — Mac 风扇控制 / MacBook Pro Fan Control
+# AirPulse — M 系列 Mac 风扇控制
 
 <p align="center">
   <img src="Resources/AppIcon-256.png" width="128" height="128" alt="AirPulse 图标" />
 </p>
 
-**AirPulse** 是开源的 **Mac 风扇控制**应用：菜单栏看温度、左右风扇默认联动，以及 **AirPulse Smart mode（智能模式）**——在风扇突然狂转之前，就按温度平滑加速。
+**AirPulse** 是开源的 **Mac 风扇控制**应用：菜单栏看温度、多风扇默认联动，以及 **AirPulse Smart mode（智能模式）**——在风扇突然狂转之前，就按温度平滑加速。
 
-面向 **Apple Silicon** MacBook / MacBook Pro（M 系列）。
+面向带风扇的 **Apple Silicon（M 系列）** Mac：MacBook Pro、Mac mini、Mac Studio、Mac Pro、iMac。风扇数量与传感器在运行时探测，单风扇桌面机和双风扇笔记本共用同一套逻辑。无风扇机型（MacBook Air）仍可查看温度。
 
 > English README: [README.md](README.md)
+
+## 支持的 Mac
+
+AirPulse 通过 Apple Silicon SMC 工作，不绑定某一款机身：
+
+| Mac | 风扇 | 说明 |
+|-----|------|------|
+| **MacBook Pro**（M1 起） | 1–2 | 默认联动（高级里可解除，分别控制） |
+| **Mac mini**（M1 起） | 1 | 单风扇转速 + 智能 / 自定义 / 自动 |
+| **Mac Studio** | 1+ | 对 SMC 报告的全部风扇联动 |
+| **Mac Pro**（M 系列） | 多个 | 全部风扇联动 |
+| **iMac**（M 系列） | 1+ | 与其他 M 系列桌面机相同 |
+| **MacBook Air** | 无 | 仅温度，没有可控制的风扇 |
+
+不面向 Intel Mac。开发机是 MacBook Pro（M5 Pro）；Mini / Studio / Pro 使用同一套 SMC 风扇 key（`FNum`、`F%dTg`、`F%dmd` / `F%dMd`）。
 
 ## 模式
 
@@ -58,7 +73,7 @@ macOS **自动（Auto）** 把风扇交给系统。能用，但是黑盒：常�
 
 ## 下载
 
-最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**（当前 **v1.0.0**）
+最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**（当前 **v1.0.1**）
 
 1. 下载 `AirPulse-x.y.z.dmg`
 2. 拖到 **应用程序**
@@ -66,14 +81,16 @@ macOS **自动（Auto）** 把风扇交给系统。能用，但是黑盒：常�
 4. 点一次 **启用风扇控制**（管理员密码）
 5. 日常选 **AirPulse Smart mode**，需要时再切 **自定义** / **自动**
 
+在 **高级** 里点 **检查更新**，有新版本时可直接下载。
+
 > 未签名构建：右键 → **打开**，或在 **系统设置 → 隐私与安全性** 允许。
 
 ## 功能
 
-- 菜单栏：CPU / GPU / 电池温度 + 联动主滑杆
+- 菜单栏：CPU / GPU / 电池（桌面机则为内存）温度 + 联动转速滑杆
 - 三种预设：**自动 · 自定义 · 智能**（Smart 在界面上突出显示）
-- 可解除联动，分别控制左右风扇
-- 语言、**摄氏 / 华氏**、登录时打开、毛玻璃**背景色**、恢复自动等低频设置收进 **高级**，主面板更清爽
+- 多风扇机型可解除联动，分别控制
+- 语言、**摄氏 / 华氏**、登录时打开、毛玻璃**背景色**、**检查更新**、恢复自动等低频设置收进 **高级**
 - 右键菜单栏图标即可 **恢复自动** / **退出**
 - 登录时打开 + 记住上次预设 / 转速
 - 默认英语，应用内 **English / 中文**
@@ -102,4 +119,4 @@ sudo ./Scripts/install-helper.sh   # 可选；或用应用内「启用风扇控�
 
 ## 关键词
 
-`mac风扇控制` · `AirPulse Smart mode` · `mac fan control` · `macbook fan control` · `macos风扇控制` · `苹果硅风扇` · `SMC风扇`
+`mac风扇控制` · `M系列风扇` · `mac mini风扇` · `mac studio风扇` · `AirPulse Smart mode` · `mac fan control` · `macos风扇控制` · `苹果硅风扇` · `SMC风扇`
