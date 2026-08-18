@@ -73,7 +73,7 @@ Also: restore Auto on quit / helper disconnect, helper API version check, re-ass
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.1**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.2**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**
@@ -81,7 +81,7 @@ Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (curren
 4. Tap **Enable Fan Control** once (admin password)
 5. Choose **AirPulse Smart mode** for everyday use — or **Custom** / **Auto**
 
-In **Advanced**, tap **Check for Updates** to see if a newer release is available and download it.
+In **Advanced**, tap **Check for Updates**. If a newer release is available, **Install Update** replaces the app and relaunches it.
 
 > Unsigned build first open: right-click → **Open**, or allow under **System Settings → Privacy & Security**.
 
@@ -90,7 +90,7 @@ In **Advanced**, tap **Check for Updates** to see if a newer release is availabl
 - Menu-bar popover: CPU / GPU / battery (or memory on desktops) + linked speed slider
 - Three presets: **Auto · Custom · Smart** (AirPulse Smart mode is visually highlighted)
 - Multi-fan Macs: optional unlink for independent per-fan control
-- Set-and-forget controls (language, **°C / °F**, Launch at Login, frosted **background** tint, **Check for Updates**, Restore Auto) tucked under **Advanced**
+- Set-and-forget controls (language, **°C / °F**, Launch at Login, frosted **background** tint, **in-app updates**, Restore Auto) tucked under **Advanced**
 - Right-click the menu-bar icon for **Restore Auto** and **Quit**
 - Launch at Login + remembers last preset / speed
 - English UI by default, in-app **English / 中文**

@@ -154,15 +154,11 @@ struct L10n {
   var checkAgain: String { t("Check Again", "重新检查") }
   var checkingUpdates: String { t("Checking…", "正在检查…") }
   var upToDate: String { t("You're up to date", "已是最新版本") }
-  var downloadUpdate: String { t("Download Update", "下载更新") }
+  var installUpdate: String { t("Install Update", "立即更新") }
   var downloadingUpdate: String { t("Downloading…", "正在下载…") }
+  var installingUpdate: String { t("Installing…", "正在安装…") }
+  var restartingForUpdate: String { t("Restarting…", "正在重启…") }
   var updateCheckFailed: String { t("Could not check for updates", "无法检查更新") }
-  var updateOpenedDMG: String {
-    t(
-      "Opened the installer — drag AirPulse into Applications to finish.",
-      "已打开安装盘，请将 AirPulse 拖到「应用程序」完成更新。"
-    )
-  }
 
   func currentVersion(_ version: String) -> String {
     t("Current version \(version)", "当前版本 \(version)")

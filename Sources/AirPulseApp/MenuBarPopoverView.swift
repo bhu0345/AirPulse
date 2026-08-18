@@ -155,8 +155,10 @@ struct MenuBarPopoverView: View {
       return L.updateAvailable(latest)
     case .downloading:
       return L.downloadingUpdate
-    case .installed:
-      return L.updateOpenedDMG
+    case .installing:
+      return L.installingUpdate
+    case .restarting:
+      return L.restartingForUpdate
     case .failed(let message):
       return "\(L.updateCheckFailed): \(message)"
     }
@@ -167,16 +169,16 @@ struct MenuBarPopoverView: View {
     switch updateChecker.state {
     case .available:
       Button {
-        updateChecker.downloadUpdate()
+        updateChecker.installUpdate()
       } label: {
-        Text(L.downloadUpdate)
+        Text(L.installUpdate)
           .font(.system(size: 12, weight: .semibold))
           .frame(maxWidth: .infinity)
           .padding(.vertical, 6)
       }
       .buttonStyle(.borderedProminent)
       .controlSize(.small)
-    case .checking, .downloading:
+    case .checking, .downloading, .installing, .restarting:
       HStack {
         ProgressView()
           .controlSize(.small)
