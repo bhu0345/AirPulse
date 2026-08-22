@@ -22,6 +22,17 @@ public enum AirPulseConfig {
 
   public static let reassertInterval: TimeInterval = 2.0
   public static let pollInterval: TimeInterval = 1.0
+
+  /// After a high reading, Smart keeps the higher fan speed at least this long.
+  public static let smartHoldAfterHighSeconds: TimeInterval = 16
+  /// Sensor reading that counts as "high" and starts / refreshes the hold.
+  public static let smartHighCelsius: Float = 74
+  /// How fast the remembered peak temperature forgets (°C / s) after the hold.
+  public static let smartPeakDecayCelsiusPerSecond: Float = 0.28
+  /// Max downward fan-fraction change per second once the hold expires.
+  public static let smartMaxDownwardFractionPerSecond: Double = 0.035
+  /// Ignore Smart writes smaller than this so XPC is not spammed.
+  public static let smartMinFractionDelta: Double = 0.015
 }
 
 public enum SafetyAction: String, Sendable, Codable {

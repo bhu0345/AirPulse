@@ -41,9 +41,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0.2</string>
+  <string>1.0.3</string>
   <key>CFBundleVersion</key>
-  <string>13</string>
+  <string>14</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>
@@ -62,6 +62,15 @@ codesign --force --deep --sign - "$APP" 2>/dev/null || true
 mkdir -p "$ROOT/Release"
 rm -rf "$RELEASE_APP"
 cp -R "$APP" "$RELEASE_APP"
+
+# The repo copy lives under Documents, so Launchpad/Spotlight would otherwise
+# list it as a second AirPulse next to /Applications/AirPulse.app.
+touch "$ROOT/Release/.metadata_never_index"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+"$LSREGISTER" -u "$RELEASE_APP" >/dev/null 2>&1 || true
+if [[ -d /Applications/AirPulse.app ]]; then
+  "$LSREGISTER" -f /Applications/AirPulse.app >/dev/null 2>&1 || true
+fi
 
 echo "==> Built $APP"
 echo "    Release copy: $RELEASE_APP"

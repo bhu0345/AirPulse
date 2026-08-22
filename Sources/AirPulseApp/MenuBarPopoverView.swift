@@ -8,9 +8,12 @@ struct MenuBarPopoverView: View {
   @ObservedObject private var unitStore = UnitStore.shared
   @ObservedObject private var backgroundStore = PanelBackgroundStore.shared
   @StateObject private var updateChecker = UpdateChecker()
+  @ObservedObject private var activityLog = DiagnosticLog.shared
   @State private var showAdvanced = false
+  @State private var showLog = false
   @State private var linkedSliderValue: Double = 0.3
   @State private var isDraggingLinked = false
+  @State private var didDragLinked = false
 
   private var L: L10n { languageStore.strings }
 
@@ -30,7 +33,7 @@ struct MenuBarPopoverView: View {
       } else {
         presetRow
         linkedSlider
-        if (showAdvanced || !service.linkedEnabled) && hasMultipleFans {
+        if !service.linkedEnabled && hasMultipleFans {
           unlinkedSection
         }
       }
@@ -54,6 +57,9 @@ struct MenuBarPopoverView: View {
       if !isDraggingLinked {
         linkedSliderValue = newValue
       }
+    }
+    .onChange(of: showAdvanced) { _, open in
+      if !open { showLog = false }
     }
   }
 
@@ -89,26 +95,31 @@ struct MenuBarPopoverView: View {
     return service.linkedEnabled ? L.fansLinked : L.fansUnlinked
   }
 
-  /// Everything that is set once and then forgotten lives behind “Advanced”.
+  /// Preferences, updates, and diagnostics — grouped like System Settings.
   private var advancedSection: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      languageRow
-      temperatureUnitRow
-      launchAtLoginRow
-      backgroundRow
-      Divider().opacity(0.4)
-      updatesRow
-      Divider().opacity(0.4)
-      HStack {
-        Button(L.restoreAuto) {
-          service.restoreAuto()
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        Spacer()
+    VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 8) {
+        languageRow
+        temperatureUnitRow
+        launchAtLoginRow
+        backgroundRow
       }
+
+      advancedDivider
+      compactUpdatesRow
+
+      advancedDivider
+      logDisclosure
+
+      advancedDivider
+      Button(L.restoreAuto) {
+        service.restoreAuto()
+      }
+      .buttonStyle(.borderless)
+      .controlSize(.small)
+      .font(.caption)
     }
-    .padding(10)
+    .padding(12)
     .background(
       RoundedRectangle(cornerRadius: 12, style: .continuous)
         .fill(Color.primary.opacity(0.04))
@@ -120,35 +131,56 @@ struct MenuBarPopoverView: View {
     }
   }
 
-  private var updatesRow: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack {
+  private var advancedDivider: some View {
+    Divider()
+      .opacity(0.32)
+      .padding(.vertical, 8)
+  }
+
+  private var compactUpdatesRow: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 8) {
         Text(L.updatesLabel)
           .font(.caption)
           .foregroundStyle(.secondary)
-        Spacer()
-        Text("v\(UpdateChecker.currentVersion)")
-          .font(.caption2.monospacedDigit())
-          .foregroundStyle(.tertiary)
+        Spacer(minLength: 8)
+        Text(compactUpdateStatus)
+          .font(.caption2)
+          .foregroundStyle(updateStatusIsWarning ? Color.orange : Color.secondary)
+          .lineLimit(1)
+        updateTrailingControl
       }
 
-      Text(updateStatusText)
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
+      if case .available = updateChecker.state {
+        Button {
+          updateChecker.installUpdate()
+        } label: {
+          Text(L.installUpdate)
+            .font(.system(size: 12, weight: .semibold))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 5)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+      }
 
-      updateActionButton
+      if case .failed(let message) = updateChecker.state {
+        Text(message)
+          .font(.caption2)
+          .foregroundStyle(.orange)
+          .fixedSize(horizontal: false, vertical: true)
+      }
     }
   }
 
-  private var updateStatusText: String {
+  private var compactUpdateStatus: String {
     switch updateChecker.state {
     case .idle:
-      return L.currentVersion(UpdateChecker.currentVersion)
+      return "v\(UpdateChecker.currentVersion)"
     case .checking:
       return L.checkingUpdates
     case .upToDate:
-      return L.upToDate
+      return "v\(UpdateChecker.currentVersion) · \(L.upToDate)"
     case .ahead(_, let latest):
       return L.newerThanRelease("v\(latest)")
     case .available(let latest, _, _):
@@ -159,37 +191,37 @@ struct MenuBarPopoverView: View {
       return L.installingUpdate
     case .restarting:
       return L.restartingForUpdate
-    case .failed(let message):
-      return "\(L.updateCheckFailed): \(message)"
+    case .failed:
+      return L.updateCheckFailed
+    }
+  }
+
+  private var updateStatusIsWarning: Bool {
+    switch updateChecker.state {
+    case .available, .failed: return true
+    default: return false
     }
   }
 
   @ViewBuilder
-  private var updateActionButton: some View {
+  private var updateTrailingControl: some View {
     switch updateChecker.state {
-    case .available:
-      Button {
-        updateChecker.installUpdate()
-      } label: {
-        Text(L.installUpdate)
-          .font(.system(size: 12, weight: .semibold))
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 6)
-      }
-      .buttonStyle(.borderedProminent)
-      .controlSize(.small)
     case .checking, .downloading, .installing, .restarting:
-      HStack {
-        ProgressView()
-          .controlSize(.small)
-        Spacer()
-      }
+      ProgressView()
+        .controlSize(.mini)
+    case .available:
+      EmptyView()
     default:
-      Button(updateChecker.state == .idle ? L.checkForUpdates : L.checkAgain) {
+      Button {
         updateChecker.check()
+      } label: {
+        Image(systemName: "arrow.clockwise")
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(.secondary)
       }
-      .buttonStyle(.bordered)
-      .controlSize(.small)
+      .buttonStyle(.borderless)
+      .help(updateChecker.state == .idle ? L.checkForUpdates : L.checkAgain)
+      .accessibilityLabel(updateChecker.state == .idle ? L.checkForUpdates : L.checkAgain)
     }
   }
 
@@ -491,11 +523,28 @@ struct MenuBarPopoverView: View {
         HStack {
           Image(systemName: "fanblades")
             .foregroundStyle(.secondary)
-          Slider(value: $linkedSliderValue, in: 0...1) { editing in
-            isDraggingLinked = editing
-            service.isDraggingSlider = editing
-            if !editing {
-              service.applyLinkedFraction(linkedSliderValue)
+          Slider(
+            value: Binding(
+              get: { linkedSliderValue },
+              set: { newValue in
+                linkedSliderValue = newValue
+                if isDraggingLinked { didDragLinked = true }
+              }
+            ),
+            in: 0...1
+          ) { editing in
+            if editing {
+              isDraggingLinked = true
+              didDragLinked = false
+              service.isDraggingSlider = true
+            } else {
+              let shouldCommit = isDraggingLinked && didDragLinked
+              isDraggingLinked = false
+              didDragLinked = false
+              service.isDraggingSlider = false
+              if shouldCommit {
+                service.applyLinkedFraction(linkedSliderValue)
+              }
             }
           }
           .transaction { $0.animation = nil }
@@ -580,6 +629,97 @@ struct MenuBarPopoverView: View {
       }
       .font(.caption)
     }
+  }
+
+  private var logDisclosure: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 8) {
+        Button {
+          withAnimation(.easeInOut(duration: 0.18)) {
+            showLog.toggle()
+          }
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: "chevron.right")
+              .font(.system(size: 8, weight: .semibold))
+              .rotationEffect(.degrees(showLog ? 90 : 0))
+            Text(L.activityLog)
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L.activityLog)
+        .accessibilityAddTraits(showLog ? .isSelected : [])
+
+        Spacer(minLength: 8)
+
+        if showLog {
+          Button(L.copyLog, action: copyLog)
+          Button(L.clearLog) {
+            activityLog.clear()
+          }
+        } else if !activityLog.entries.isEmpty {
+          Text("\(activityLog.entries.count)")
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.tertiary)
+        }
+      }
+      .font(.caption)
+      .buttonStyle(.borderless)
+
+      if showLog {
+        logEntries
+      }
+    }
+  }
+
+  private var logEntries: some View {
+    ScrollViewReader { proxy in
+      ScrollView {
+        LazyVStack(alignment: .leading, spacing: 2) {
+          if activityLog.entries.isEmpty {
+            Text(L.logEmpty)
+              .font(.caption2)
+              .foregroundStyle(.tertiary)
+          } else {
+            ForEach(activityLog.entries) { entry in
+              Text(entry.line)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(logColor(entry.level))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .id(entry.id)
+            }
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+      .frame(height: 100)
+      .padding(8)
+      .background(
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+          .fill(Color.primary.opacity(0.05))
+      )
+      .onChange(of: activityLog.entries.last?.id) { _, id in
+        guard let id else { return }
+        proxy.scrollTo(id, anchor: .bottom)
+      }
+    }
+  }
+
+  private func logColor(_ level: DiagnosticLevel) -> Color {
+    switch level {
+    case .info: return Color.primary.opacity(0.75)
+    case .warning: return .orange
+    case .error: return .red
+    }
+  }
+
+  private func copyLog() {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(activityLog.textDump, forType: .string)
   }
 
   /// System menu vibrancy, with an optional Apple-style wash from Advanced.

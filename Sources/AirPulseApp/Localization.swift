@@ -183,10 +183,14 @@ struct L10n {
   }
   var smartHelp: String {
     t(
-      "AirPulse Smart mode: fan speed follows temperature automatically — recommended daily mode",
-      "AirPulse Smart mode：按温度自动调速 — 推荐日常使用"
+      "AirPulse Smart mode: fans follow temperature, then hold after a heat spike so they do not chatter",
+      "AirPulse Smart mode：按温度自动调速，高温后维持转速，避免风扇来回抖动"
     )
   }
+  var activityLog: String { t("Activity log", "活动日志") }
+  var copyLog: String { t("Copy", "复制") }
+  var clearLog: String { t("Clear", "清除") }
+  var logEmpty: String { t("No events yet", "暂无记录") }
   var ftstYes: String { t("yes", "有") }
   var ftstNo: String { t("no", "无") }
 
@@ -228,8 +232,32 @@ struct L10n {
   func linkedStatus(_ percent: Int) -> String {
     "\(linkedPercent) \(percent)%"
   }
-  func smartStatus(_ temperature: String, percent: Int) -> String {
-    t("Smart \(temperature) → \(percent)%", "智能 \(temperature) → \(percent)%")
+  func smartPhaseTitle(_ phase: SmartPhase) -> String {
+    switch phase {
+    case .rise: return t("rising", "上升")
+    case .hold: return t("holding", "维持")
+    case .decay: return t("easing", "缓降")
+    case .steady: return t("steady", "稳定")
+    }
+  }
+
+  func smartStatus(_ temperature: String, percent: Int, phase: SmartPhase) -> String {
+    switch phase {
+    case .hold:
+      return t(
+        "Smart \(temperature) → \(percent)% · holding",
+        "智能 \(temperature) → \(percent)% · 维持")
+    case .decay:
+      return t(
+        "Smart \(temperature) → \(percent)% · easing",
+        "智能 \(temperature) → \(percent)% · 缓降")
+    case .rise:
+      return t(
+        "Smart \(temperature) → \(percent)% · rising",
+        "智能 \(temperature) → \(percent)% · 上升")
+    case .steady:
+      return t("Smart \(temperature) → \(percent)%", "智能 \(temperature) → \(percent)%")
+    }
   }
   func fanRPMStatus(_ index: Int, rpm: Int) -> String {
     "\(fan) \(index): \(rpm) RPM"

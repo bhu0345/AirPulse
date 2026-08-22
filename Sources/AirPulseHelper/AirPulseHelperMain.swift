@@ -12,6 +12,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   private var reassertTimer: DispatchSourceTimer?
   private var desiredFraction: Double?
   private var desiredPreset: FanPreset = .auto
+  private var smartGovernor = SmartGovernor()
   private let queue = DispatchQueue(label: "com.bingtaohu.AirPulse.helper")
   private var connectionCount = 0
   private let connectionLock = NSLock()
@@ -66,6 +67,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
     try? ensureController().restoreSystemControl()
     desiredPreset = .auto
     desiredFraction = nil
+    smartGovernor.reset()
     stopReassert()
   }
 
@@ -127,9 +129,11 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       _ = try c.applyPreset(preset)
       desiredPreset = preset
       if preset == .smart {
+        smartGovernor.reset()
         let temp = c.maxPrimaryTemperature() ?? 60
-        desiredFraction = FanCurve.fraction(forCelsius: temp)
+        desiredFraction = smartGovernor.evaluate(celsius: temp).appliedFraction
       } else {
+        smartGovernor.reset()
         desiredFraction = preset.speedFraction
       }
       if preset == .auto {
@@ -147,7 +151,12 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
     do {
       let c = try ensureController()
       _ = try c.setLinkedFraction(fraction)
-      desiredPreset = .custom
+      // Smart applies speeds through this same write path. Keep Smart so
+      // reassert continues to hold / decay instead of becoming a fixed Custom.
+      if desiredPreset != .smart {
+        desiredPreset = .custom
+        smartGovernor.reset()
+      }
       desiredFraction = fraction
       startReassert()
       reply(true, nil)
@@ -173,6 +182,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       try ensureController().restoreSystemControl()
       desiredPreset = .auto
       desiredFraction = nil
+      smartGovernor.reset()
       stopReassert()
       reply(true, nil)
     } catch {
@@ -221,8 +231,10 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       stopReassert()
       return
     case .forceEmergencyCool:
-      desiredPreset = .custom
       desiredFraction = FanPreset.emergencyCoolFraction
+      if desiredPreset != .smart {
+        desiredPreset = .custom
+      }
     case .raiseHighFloor, .raiseLowFloor:
       let floor = safety.minimumFraction()
       if let f = desiredFraction, f < floor {
@@ -235,11 +247,21 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       break
     }
 
-    if desiredPreset == .smart, let temp = maxTemp {
-      var fraction = FanCurve.fraction(forCelsius: temp)
-      fraction = max(fraction, safety.minimumFraction())
-      desiredFraction = fraction
-      _ = try? c.setLinkedFraction(fraction)
+    if desiredPreset == .smart {
+      // The app owns hold / decay. Reassert the last commanded speed so the
+      // helper cannot drop fans on a 1-second temperature dip.
+      if var fraction = desiredFraction {
+        fraction = max(fraction, safety.minimumFraction())
+        desiredFraction = fraction
+        _ = try? c.setLinkedFraction(fraction)
+        return
+      }
+      if let temp = maxTemp {
+        var fraction = smartGovernor.evaluate(celsius: temp).appliedFraction
+        fraction = max(fraction, safety.minimumFraction())
+        desiredFraction = fraction
+        _ = try? c.setLinkedFraction(fraction)
+      }
       return
     }
 

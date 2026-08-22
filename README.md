@@ -73,7 +73,7 @@ Also: restore Auto on quit / helper disconnect, helper API version check, re-ass
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.2**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.3**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**
@@ -90,7 +90,8 @@ In **Advanced**, tap **Check for Updates**. If a newer release is available, **I
 - Menu-bar popover: CPU / GPU / battery (or memory on desktops) + linked speed slider
 - Three presets: **Auto · Custom · Smart** (AirPulse Smart mode is visually highlighted)
 - Multi-fan Macs: optional unlink for independent per-fan control
-- Set-and-forget controls (language, **°C / °F**, Launch at Login, frosted **background** tint, **in-app updates**, Restore Auto) tucked under **Advanced**
+- Set-and-forget controls (language, **°C / °F**, Launch at Login, frosted **background** tint, **in-app updates**, activity log, Restore Auto) tucked under **Advanced**
+- Smart holds fan speed after a heat spike so it does not chatter high/low every second
 - Right-click the menu-bar icon for **Restore Auto** and **Quit**
 - Launch at Login + remembers last preset / speed
 - English UI by default, in-app **English / 中文**
