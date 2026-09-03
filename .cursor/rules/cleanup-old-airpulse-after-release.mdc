@@ -1,0 +1,20 @@
+---
+description: After every AirPulse update, delete stale AirPulse copies on this Mac
+alwaysApply: true
+---
+
+# Cleanup old AirPulse after every update
+
+Not optional. After **any** version bump, `build-app.sh`, copy to `/Applications`, `git push`, tag, or GitHub release — in the **same turn**, before you say done — remove older AirPulse copies on this Mac so Launchpad and Spotlight do not keep the previous version.
+
+Do:
+
+1. Find bundles: `mdfind 'kMDItemCFBundleIdentifier == "com.bingtaohu.AirPulse"'` plus `/Applications`, Desktop, Downloads.
+2. Read each `CFBundleShortVersionString`. Delete any app **older than the version just shipped**.
+3. Quit an old running instance before deleting it (`osascript -e 'tell application "AirPulse" to quit'` or kill that PID).
+4. Replace `/Applications/AirPulse.app` with the new build (copy from `Release/AirPulse.app`) so Applications is current, not empty.
+5. Delete leftover **pre-1.0.4** helper: `sudo rm -f /usr/local/libexec/AirPulseHelper` (bootout `system/com.bingtaohu.AirPulse.helper` first if it still points at libexec).
+6. Do **not** delete the repo copies: `Release/AirPulse.app` and `Products/AirPulse.app`.
+7. Refresh Launch Services (`lsregister -f /Applications/AirPulse.app`) so the old icon disappears.
+
+Example: after shipping 1.0.4, delete `/Applications/AirPulse.app` if it still says 1.0.3, copy the 1.0.4 Release app there, and remove `/usr/local/libexec/AirPulseHelper`.
