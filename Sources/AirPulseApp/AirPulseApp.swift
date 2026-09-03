@@ -31,19 +31,63 @@ final class MenuBarPanel: NSPanel {
 
 /// Reports the SwiftUI content size so the delegate can grow the panel without
 /// handing positioning back to AppKit.
+///
+/// Uses a tiny AppKit view instead of `GeometryReader` + `onChange`: on macOS 26
+/// that combination keeps Observation tracking alive across 1 Hz sensor publishes
+/// and eventually pins a CPU core.
 private struct PanelContent: View {
   let service: FanService
   let onResize: (CGSize) -> Void
 
   var body: some View {
     MenuBarPopoverView(service: service)
-      .background(
-        GeometryReader { proxy in
-          Color.clear
-            .onAppear { onResize(proxy.size) }
-            .onChange(of: proxy.size) { _, size in onResize(size) }
-        }
-      )
+      .background(SizeReporter(onResize: onResize))
+  }
+}
+
+private struct SizeReporter: NSViewRepresentable {
+  let onResize: (CGSize) -> Void
+
+  func makeNSView(context: Context) -> SizeReporterView {
+    SizeReporterView(onResize: onResize)
+  }
+
+  func updateNSView(_ view: SizeReporterView, context: Context) {
+    view.onResize = onResize
+  }
+}
+
+private final class SizeReporterView: NSView {
+  var onResize: (CGSize) -> Void
+  private var lastSize: CGSize = .zero
+
+  init(onResize: @escaping (CGSize) -> Void) {
+    self.onResize = onResize
+    super.init(frame: .zero)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { nil }
+
+  override func layout() {
+    super.layout()
+    reportIfNeeded()
+  }
+
+  override func setFrameSize(_ newSize: NSSize) {
+    super.setFrameSize(newSize)
+    reportIfNeeded()
+  }
+
+  private func reportIfNeeded() {
+    let size = bounds.size
+    guard size.width > 0, size.height > 0 else { return }
+    guard abs(size.width - lastSize.width) > 0.5 || abs(size.height - lastSize.height) > 0.5
+    else {
+      return
+    }
+    lastSize = size
+    onResize(size)
   }
 }
 
@@ -166,6 +210,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let panel = panel ?? makePanel()
     self.panel = panel
+    // Fresh hosting view every open. An ordered-out NSHostingView still
+    // receives 1 Hz @Published sensor updates and leaks Observation records
+    // on macOS 26 until the process pins a CPU core.
+    installPanelContent(panel)
     anchorRect = buttonWindow.convertToScreen(button.convert(button.bounds, to: nil))
     anchorScreen = buttonWindow.screen ?? NSScreen.main
 
@@ -201,11 +249,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     panel.hidesOnDeactivate = false
     panel.isReleasedWhenClosed = false
     panel.animationBehavior = .none
-    panel.contentView = NSHostingView(
-      rootView: PanelContent(service: service) { [weak self] size in
-        self?.panelContentDidResize(to: size)
-      }
-    )
     NotificationCenter.default.addObserver(
       self,
       selector: #selector(panelWillClose),
@@ -243,6 +286,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     lastPanelCloseTime = Date()
     statusItem?.button?.isHighlighted = false
     stopWatchingForOutsideClicks()
+    panel?.contentView = nil
+  }
+
+  private func installPanelContent(_ panel: MenuBarPanel) {
+    panel.contentView = NSHostingView(
+      rootView: PanelContent(service: service) { [weak self] size in
+        self?.panelContentDidResize(to: size)
+      }
+    )
   }
 
   private func watchForOutsideClicks() {

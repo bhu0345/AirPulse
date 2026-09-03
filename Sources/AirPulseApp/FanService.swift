@@ -360,7 +360,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
     let generation = helperGeneration
     didRestoreAfterConnect = false
 
-    xpc?.invalidate()
+    let previous = xpc
     let client = HelperXPCClient(machServiceName: AirPulseConfig.helperMachService)
     client.setDisconnectHandler { [weak self] in
       DispatchQueue.main.async {
@@ -369,6 +369,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       }
     }
     xpc = client
+    previous?.invalidate()
 
     client.pingRaw { [weak self] reply in
       DispatchQueue.main.async {
@@ -422,7 +423,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
 
   func installHelper() {
     let helperURL = Bundle.main.bundleURL
-      .appendingPathComponent("Contents/MacOS/AirPulseHelper")
+      .appendingPathComponent(AirPulseConfig.helperRelativePath)
     var helperPath = helperURL.path
     if !FileManager.default.isExecutableFile(atPath: helperPath) {
       helperPath = ProductPaths.helperPath
@@ -437,17 +438,15 @@ final class FanService: ObservableObject, @unchecked Sendable {
       self.statusMessage = self.L.helperInstalling
     }
 
-    let dst = "/usr/local/libexec/AirPulseHelper"
     let plistPath = "/Library/LaunchDaemons/\(AirPulseConfig.helperLabel).plist"
     let label = AirPulseConfig.helperLabel
     let mach = AirPulseConfig.helperMachService
+    let legacy = AirPulseConfig.legacyHelperPath
 
+    // ponytail: launchd runs the bundled helper (user-writable). PrivilegedHelperTools if we ship signed.
     let script = """
     #!/bin/bash
     set -euo pipefail
-    mkdir -p /usr/local/libexec
-    cp "\(helperPath)" "\(dst)"
-    chmod 755 "\(dst)"
     cat > "\(plistPath)" <<'PLIST'
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -457,21 +456,23 @@ final class FanService: ObservableObject, @unchecked Sendable {
       <string>\(label)</string>
       <key>ProgramArguments</key>
       <array>
-        <string>\(dst)</string>
+        <string>\(helperPath)</string>
       </array>
       <key>MachServices</key>
       <dict>
         <key>\(mach)</key>
         <true/>
       </dict>
-      <key>RunAtLoad</key>
-      <true/>
       <key>KeepAlive</key>
-      <true/>
+      <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+      </dict>
     </dict>
     </plist>
     PLIST
     launchctl bootout system/\(label) 2>/dev/null || true
+    rm -f "\(legacy)"
     launchctl bootstrap system "\(plistPath)"
     launchctl enable system/\(label)
     """
@@ -579,10 +580,10 @@ final class FanService: ObservableObject, @unchecked Sendable {
         }
         if count == 0 {
           if !self.fans.isEmpty { self.fans = [] }
-        } else if !newFans.isEmpty, newFans != self.fans {
+        } else if !newFans.isEmpty, !Self.sameFans(newFans, self.fans) {
           self.fans = newFans
         }
-        if temps != self.temperatures { self.temperatures = temps }
+        if !Self.sameTemps(temps, self.temperatures) { self.temperatures = temps }
         if summary != self.hardwareSummary { self.hardwareSummary = summary }
         if self.unlinkRPM.isEmpty {
           for fan in newFans {
@@ -745,7 +746,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       self.linkedFraction = applied
       self.activePreset = .smart
       self.desiredManual = true
-      self.persistSettings()
+      // Preset is already persisted as smart; skip UserDefaults I/O on every tick.
     }
     log.info(
       "smart",
@@ -831,6 +832,23 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
     timer.resume()
     pollTimer = timer
+  }
+
+  /// Skip SwiftUI publishes for sensor jitter that does not change the display.
+  private static func sameFans(_ a: [FanSnapshot], _ b: [FanSnapshot]) -> Bool {
+    guard a.count == b.count else { return false }
+    return zip(a, b).allSatisfy { x, y in
+      x.index == y.index && x.mode == y.mode
+        && abs(x.actualRPM - y.actualRPM) < 12
+        && abs(x.targetRPM - y.targetRPM) < 12
+    }
+  }
+
+  private static func sameTemps(_ a: [TemperatureReading], _ b: [TemperatureReading]) -> Bool {
+    guard a.count == b.count else { return false }
+    return zip(a, b).allSatisfy { x, y in
+      x.key == y.key && abs(x.celsius - y.celsius) < 0.5
+    }
   }
 
   private func observeWake() {
@@ -924,10 +942,11 @@ enum ProductPaths {
 
   static var helperPath: String {
     let cwd = FileManager.default.currentDirectoryPath
+    let rel = AirPulseConfig.helperRelativePath
     let candidates = [
       "\(cwd)/.build/release/AirPulseHelper",
-      "\(cwd)/Products/AirPulse.app/Contents/MacOS/AirPulseHelper",
-      "\(cwd)/Release/AirPulse.app/Contents/MacOS/AirPulseHelper",
+      "\(cwd)/Products/AirPulse.app/\(rel)",
+      "\(cwd)/Release/AirPulse.app/\(rel)",
     ]
     return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? candidates[0]
   }

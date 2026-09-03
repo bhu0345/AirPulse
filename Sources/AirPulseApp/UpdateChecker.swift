@@ -27,7 +27,7 @@ final class UpdateChecker: ObservableObject {
   static var currentVersion: String {
     let bundle = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
     let trimmed = bundle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return trimmed.isEmpty ? "1.0.3" : trimmed
+    return trimmed.isEmpty ? "1.0.4" : trimmed
   }
 
   func check() {

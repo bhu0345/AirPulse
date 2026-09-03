@@ -11,23 +11,23 @@
 	</dict>
 	<key>files2</key>
 	<dict>
-		<key>MacOS/AirPulseHelper</key>
+		<key>Helpers/AirPulseHelper</key>
 		<dict>
 			<key>cdhash</key>
 			<data>
-			idfxJCwFybV0zlI8GuWEq1EO+Dc=
+			esNfjporOLGdhBbK/JTcHQxXR/s=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"89d7f1242c05c9b574ce523c1ae584ab510ef837"</string>
+			<string>cdhash H"7ac35f8e9a2b38b19d8416cafc94dc1d0c5747fb"</string>
 		</dict>
 		<key>MacOS/airpulse-cli</key>
 		<dict>
 			<key>cdhash</key>
 			<data>
-			HU+KKh1AXIE5LwHj6/0Wi68Ivrk=
+			P80tfhwtRVXLwMJd5hYo7OFzdFo=
 			</data>
 			<key>requirement</key>
-			<string>cdhash H"1d4f8a2a1d405c81392f01e3ebfd168baf08beb9"</string>
+			<string>cdhash H"3fcd2d7e1c2d4555cbc0c25de61628ece173745a"</string>
 		</dict>
 		<key>Resources/AppIcon.icns</key>
 		<dict>

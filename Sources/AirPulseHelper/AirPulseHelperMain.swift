@@ -58,6 +58,7 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       self.connectionLock.unlock()
       if remaining == 0 {
         self.restoreIfNeededOnClientGone()
+        DispatchQueue.main.async { exit(0) }
       }
     }
   }

@@ -12,14 +12,15 @@ BIN="$ROOT/.build/release"
 APP="$ROOT/Products/AirPulse.app"
 RELEASE_APP="$ROOT/Release/AirPulse.app"
 MACOS="$APP/Contents/MacOS"
+HELPERS="$APP/Contents/Helpers"
 RES="$APP/Contents/Resources"
 
 rm -rf "$APP"
-mkdir -p "$MACOS" "$RES"
+mkdir -p "$MACOS" "$HELPERS" "$RES"
 
 cp "$BIN/AirPulse" "$MACOS/AirPulse"
 cp "$BIN/airpulse-cli" "$MACOS/airpulse-cli"
-cp "$BIN/AirPulseHelper" "$MACOS/AirPulseHelper"
+cp "$BIN/AirPulseHelper" "$HELPERS/AirPulseHelper"
 
 if [[ -f "$ROOT/Resources/AppIcon.icns" ]]; then
   cp "$ROOT/Resources/AppIcon.icns" "$RES/AppIcon.icns"
@@ -41,9 +42,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0.3</string>
+  <string>1.0.4</string>
   <key>CFBundleVersion</key>
-  <string>14</string>
+  <string>15</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>
@@ -75,7 +76,7 @@ fi
 echo "==> Built $APP"
 echo "    Release copy: $RELEASE_APP"
 echo "    CLI: $MACOS/airpulse-cli"
-echo "    Helper: $MACOS/AirPulseHelper"
+echo "    Helper: $HELPERS/AirPulseHelper"
 echo ""
 echo "Run: open \"$RELEASE_APP\""
 echo "Probe: \"$RELEASE_APP/Contents/MacOS/airpulse-cli\" probe"

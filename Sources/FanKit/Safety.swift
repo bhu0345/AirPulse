@@ -7,7 +7,10 @@ public enum AirPulseConfig {
   public static let helperLabel = "com.bingtaohu.AirPulse.helper"
 
   /// Bump when Helper XPC contract or required behavior changes.
-  public static let helperAPIVersion = 3
+  public static let helperAPIVersion = 4
+  public static let helperRelativePath = "Contents/Helpers/AirPulseHelper"
+  /// Leftover from 1.0.3 and earlier; install/uninstall always delete it.
+  public static let legacyHelperPath = "/usr/local/libexec/AirPulseHelper"
 
   /// Raise minimum fan fraction at or above this temperature (°C).
   public static let lowFloorCelsius: Float = 78

@@ -73,7 +73,7 @@ macOS **自动（Auto）** 把风扇交给系统。能用，但是黑盒：常�
 
 ## 下载
 
-最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**（当前 **v1.0.3**）
+最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**（当前 **v1.0.4**）
 
 1. 下载 `AirPulse-x.y.z.dmg`
 2. 拖到 **应用程序**

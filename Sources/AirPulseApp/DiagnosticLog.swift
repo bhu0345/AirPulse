@@ -48,6 +48,7 @@ final class DiagnosticLog: ObservableObject, @unchecked Sendable {
 
   private let lock = NSLock()
   private var storage: [DiagnosticEntry] = []
+  private var pendingSnapshot: [DiagnosticEntry]?
   private let logger = Logger(subsystem: "com.bingtaohu.AirPulse", category: "AirPulse")
 
   private init() {}
@@ -100,10 +101,18 @@ final class DiagnosticLog: ObservableObject, @unchecked Sendable {
   }
 
   private func publish(_ snapshot: [DiagnosticEntry]) {
-    if Thread.isMainThread {
-      entries = snapshot
-    } else {
-      DispatchQueue.main.async { self.entries = snapshot }
+    lock.lock()
+    let shouldSchedule = pendingSnapshot == nil
+    pendingSnapshot = snapshot
+    lock.unlock()
+    guard shouldSchedule else { return }
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.lock.lock()
+      let next = self.pendingSnapshot
+      self.pendingSnapshot = nil
+      self.lock.unlock()
+      if let next { self.entries = next }
     }
   }
 }

@@ -8,7 +8,6 @@ struct MenuBarPopoverView: View {
   @ObservedObject private var unitStore = UnitStore.shared
   @ObservedObject private var backgroundStore = PanelBackgroundStore.shared
   @StateObject private var updateChecker = UpdateChecker()
-  @ObservedObject private var activityLog = DiagnosticLog.shared
   @State private var showAdvanced = false
   @State private var showLog = false
   @State private var linkedSliderValue: Double = 0.3
@@ -109,7 +108,7 @@ struct MenuBarPopoverView: View {
       compactUpdatesRow
 
       advancedDivider
-      logDisclosure
+      ActivityLogSection(showLog: $showLog)
 
       advancedDivider
       Button(L.restoreAuto) {
@@ -631,7 +630,33 @@ struct MenuBarPopoverView: View {
     }
   }
 
-  private var logDisclosure: some View {
+  /// System menu vibrancy, with an optional Apple-style wash from Advanced.
+  private var popoverBackground: some View {
+    ZStack {
+      VisualEffectBackdrop(material: .menu, cornerRadius: 12)
+      if let tint = backgroundStore.theme.tint {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .fill(tint)
+      }
+    }
+  }
+
+  private func tempColor(_ c: Float) -> Color {
+    if c >= 90 { return .red }
+    if c >= 75 { return .orange }
+    return .primary
+  }
+}
+
+/// Isolated so Smart-mode log lines do not rebuild the slider / temperature row.
+private struct ActivityLogSection: View {
+  @ObservedObject private var activityLog = DiagnosticLog.shared
+  @ObservedObject private var languageStore = LanguageStore.shared
+  @Binding var showLog: Bool
+
+  private var L: L10n { languageStore.strings }
+
+  var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 8) {
         Button {
@@ -721,23 +746,6 @@ struct MenuBarPopoverView: View {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(activityLog.textDump, forType: .string)
   }
-
-  /// System menu vibrancy, with an optional Apple-style wash from Advanced.
-  private var popoverBackground: some View {
-    ZStack {
-      VisualEffectBackdrop(material: .menu, cornerRadius: 12)
-      if let tint = backgroundStore.theme.tint {
-        RoundedRectangle(cornerRadius: 12, style: .continuous)
-          .fill(tint)
-      }
-    }
-  }
-
-  private func tempColor(_ c: Float) -> Color {
-    if c >= 90 { return .red }
-    if c >= 75 { return .orange }
-    return .primary
-  }
 }
 
 /// Behind-window vibrancy is composited by the window server, which ignores
@@ -758,8 +766,9 @@ private struct VisualEffectBackdrop: NSViewRepresentable {
   }
 
   func updateNSView(_ view: NSVisualEffectView, context: Context) {
-    view.material = material
-    view.maskImage = Self.maskImage(cornerRadius: cornerRadius)
+    if view.material != material {
+      view.material = material
+    }
   }
 
   private static func maskImage(cornerRadius: CGFloat) -> NSImage {

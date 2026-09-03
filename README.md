@@ -73,7 +73,7 @@ Also: restore Auto on quit / helper disconnect, helper API version check, re-ass
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.3**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.4**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**
@@ -119,7 +119,7 @@ Do not run another Mac fan control app at the same time — SMC writes will conf
 ```text
 AirPulse.app (NSStatusItem + SwiftUI popover)
     ├─ reads: in-process SMCKit
-    └─ writes: XPC → AirPulseHelper (LaunchDaemon)
+    └─ writes: XPC → Contents/Helpers/AirPulseHelper (LaunchDaemon, on-demand)
 ```
 
 Gatekeeper-friendly distribution needs a Developer ID — see [`docs/prerequisites.md`](docs/prerequisites.md) and `Scripts/sign-and-notarize.sh` (ad-hoc builds work locally with right-click Open).
