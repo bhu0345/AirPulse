@@ -69,11 +69,11 @@ macOS **自动（Auto）** 把风扇交给系统。能用，但是黑盒：常�
 | **≥90°C** | 紧急抬升约 85%（或 Smart 映射，取更高） |
 | **≥100°C** | 交还系统 **Auto** |
 
-另外：退出 / Helper 断开时恢复 Auto、Helper 版本检测、睡眠唤醒后重申设定、Helper 预热减轻首次切手动延迟。
+另外：退出 / Helper 断开时恢复 Auto（不记住预设）、Helper 版本检测、睡眠唤醒后重申设定。
 
 ## 下载
 
-最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**（当前 **v1.0.4**）
+最新 DMG：**[Releases](https://github.com/bhu0345/AirPulse/releases)**（当前 **v1.0.5**）
 
 1. 下载 `AirPulse-x.y.z.dmg`
 2. 拖到 **应用程序**
@@ -93,7 +93,7 @@ macOS **自动（Auto）** 把风扇交给系统。能用，但是黑盒：常�
 - 语言、**摄氏 / 华氏**、登录时打开、毛玻璃**背景色**、**应用内更新**、活动日志、恢复自动等低频设置收进 **高级**
 - Smart 在高温后维持转速，避免风扇每秒高低来回抖
 - 右键菜单栏图标即可 **恢复自动** / **退出**
-- 登录时打开 + 记住上次预设 / 转速
+- 登录时打开。不记住预设 — **退出**（以及 Helper 断开）恢复系统 Auto
 - 默认英语，应用内 **English / 中文**
 - Apple Silicon SMC（`F%dmd` / `F%dMd`，可选 `Ftst`）
 - CLI：`airpulse-cli probe [--write]` / `preset <auto\|custom\|smart>`

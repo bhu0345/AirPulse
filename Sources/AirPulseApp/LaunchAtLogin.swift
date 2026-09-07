@@ -24,7 +24,7 @@ enum LaunchAtLogin {
 
 enum SettingsKeys {
   static let activePreset = "airpulse.activePreset"
-  static let linkedFraction = "airpulse.linkedFraction"
+  static let customFraction = "airpulse.customFraction"
   static let linkedEnabled = "airpulse.linkedEnabled"
   static let desiredManual = "airpulse.desiredManual"
   static let launchAtLogin = "airpulse.launchAtLogin"

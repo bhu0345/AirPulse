@@ -108,7 +108,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   @Published var fans: [FanSnapshot] = []
   @Published var temperatures: [TemperatureReading] = []
   @Published var linkedEnabled = true
-  @Published var linkedFraction: Double = 0.3
+  @Published var linkedFraction: Double = FanPreset.custom.speedFraction ?? 0.45
   @Published var activePreset: FanPreset = .auto
   @Published var statusMessage: String = L10n.current.connecting {
     didSet { lastSmartReading = nil }
@@ -135,7 +135,6 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private var isStarted = false
   /// Bumps on every helper reconnect so stale disconnect/ping callbacks are ignored.
   private var helperGeneration = 0
-  private var didRestoreAfterConnect = false
   private var lastCurveFraction: Double?
   private var lastSmartPhase: SmartPhase?
   private var isRestoringForTerminate = false
@@ -162,10 +161,13 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
   }
 
+  /// Last speed the user set with the slider. Smart / safety floors do not overwrite this.
+  private var customFraction: Double = FanPreset.custom.speedFraction ?? 0.45
+
   private func persistSettings() {
     let defaults = UserDefaults.standard
     defaults.set(activePreset.rawValue, forKey: SettingsKeys.activePreset)
-    defaults.set(linkedFraction, forKey: SettingsKeys.linkedFraction)
+    defaults.set(customFraction, forKey: SettingsKeys.customFraction)
     defaults.set(linkedEnabled, forKey: SettingsKeys.linkedEnabled)
     defaults.set(desiredManual, forKey: SettingsKeys.desiredManual)
     defaults.set(launchAtLoginEnabled, forKey: SettingsKeys.launchAtLogin)
@@ -177,24 +179,15 @@ final class FanService: ObservableObject, @unchecked Sendable {
 
   private func loadPersistedSettings() {
     let defaults = UserDefaults.standard
-    if let raw = defaults.string(forKey: SettingsKeys.activePreset) {
-      let migrated: String
-      switch raw {
-      case "curve": migrated = "smart"
-      case "balanced", "quiet", "cool": migrated = "custom"
-      default: migrated = raw
-      }
-      if let preset = FanPreset(rawValue: migrated) {
-        activePreset = preset
-      }
+    activePreset = .auto
+    desiredManual = false
+    if defaults.object(forKey: SettingsKeys.customFraction) != nil {
+      customFraction = min(1, max(0, defaults.double(forKey: SettingsKeys.customFraction)))
     }
-    if defaults.object(forKey: SettingsKeys.linkedFraction) != nil {
-      linkedFraction = defaults.double(forKey: SettingsKeys.linkedFraction)
-    }
+    linkedFraction = customFraction
     if defaults.object(forKey: SettingsKeys.linkedEnabled) != nil {
       linkedEnabled = defaults.bool(forKey: SettingsKeys.linkedEnabled)
     }
-    desiredManual = defaults.bool(forKey: SettingsKeys.desiredManual)
     launchAtLoginEnabled = LaunchAtLogin.isEnabled
       || defaults.bool(forKey: SettingsKeys.launchAtLogin)
   }
@@ -358,7 +351,6 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private func tryConnectHelper() {
     helperGeneration += 1
     let generation = helperGeneration
-    didRestoreAfterConnect = false
 
     let previous = xpc
     let client = HelperXPCClient(machServiceName: AirPulseConfig.helperMachService)
@@ -391,7 +383,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
           self.log.warning("helper", "Helper update required")
         } else {
           self.statusMessage = self.L.helperConnected
-          self.warmupHelperThenRestore(generation: generation)
+          self.xpc?.openSMC { _, _ in }
         }
       }
     }
@@ -400,25 +392,6 @@ final class FanService: ObservableObject, @unchecked Sendable {
       guard let self, self.helperGeneration == generation, !self.canWrite else { return }
       self.statusMessage = self.L.monitorMode
     }
-  }
-
-  private func warmupHelperThenRestore(generation: Int) {
-    xpc?.openSMC { [weak self] _, _ in
-      self?.xpc?.warmupManual { [weak self] _, _ in
-        DispatchQueue.main.async {
-          guard let self, self.helperGeneration == generation else { return }
-          self.restorePersistedControlIfNeeded()
-        }
-      }
-    }
-  }
-
-  private func restorePersistedControlIfNeeded() {
-    guard canWrite, !didRestoreAfterConnect else { return }
-    didRestoreAfterConnect = true
-    guard desiredManual || activePreset == .smart else { return }
-    if activePreset == .auto { return }
-    applyPreset(activePreset, userInitiated: false)
   }
 
   func installHelper() {
@@ -634,7 +607,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       self.activePreset = preset
       self.desiredManual = preset != .auto
       if preset == .custom {
-        let base = self.linkedFraction > 0 ? self.linkedFraction : (preset.speedFraction ?? 0.45)
+        let base = self.customFraction
         self.linkedFraction = max(base, self.safety.minimumFraction(forMaxTemp: maxTemp))
       }
       self.persistSettings()
@@ -652,8 +625,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
 
     if preset == .custom {
-      let value = linkedFraction > 0 ? linkedFraction : (preset.speedFraction ?? 0.45)
-      applyLinkedFraction(value, userInitiated: userInitiated)
+      applyLinkedFraction(customFraction, userInitiated: false)
       return
     }
 
@@ -673,8 +645,12 @@ final class FanService: ObservableObject, @unchecked Sendable {
   }
 
   func applyLinkedFraction(_ fraction: Double, userInitiated: Bool = true) {
-    let floored = max(fraction, safety.minimumFraction(forMaxTemp: maxPrimaryTemp))
-    if floored > fraction + 0.01 {
+    let requested = min(1, max(0, fraction))
+    if userInitiated {
+      customFraction = requested
+    }
+    let floored = max(requested, safety.minimumFraction(forMaxTemp: maxPrimaryTemp))
+    if floored > requested + 0.01 {
       onMain {
         self.safetyNotice = self.L.safetyThermalFloor
         self.statusMessage = self.L.safetyThermalFloor
@@ -720,7 +696,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       self.safetyNotice = self.L.safetyWarning
       self.statusMessage = self.L.safetyWarning
     }
-    applyLinkedFraction(FanPreset.emergencyCoolFraction)
+    applyLinkedFraction(FanPreset.emergencyCoolFraction, userInitiated: false)
   }
 
   private func applyCurveFraction(force: Bool = false) {
@@ -867,7 +843,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
       if self.activePreset == .smart {
         self.applyCurveFraction(force: true)
       } else if self.linkedEnabled {
-        self.applyLinkedFraction(self.linkedFraction)
+        self.applyLinkedFraction(self.linkedFraction, userInitiated: false)
       } else {
         for (index, fraction) in self.unlinkRPM {
           self.applyUnlinked(fanIndex: index, fraction: fraction)

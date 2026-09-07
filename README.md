@@ -69,11 +69,11 @@ Leaving fans too low under load can pack heat. AirPulse actively prevents that �
 | **≥90°C** | Emergency cool ≈85% (or Smart map, whichever is higher) |
 | **≥100°C** | Hand control back to system **Auto** |
 
-Also: restore Auto on quit / helper disconnect, helper API version check, re-assert after sleep/wake, and helper warm-up so the first manual write is less laggy.
+Also: restore Auto on quit / helper disconnect (presets are not remembered), helper API version check, and re-assert after sleep/wake.
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.4**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.5**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**
@@ -93,7 +93,7 @@ In **Advanced**, tap **Check for Updates**. If a newer release is available, **I
 - Set-and-forget controls (language, **°C / °F**, Launch at Login, frosted **background** tint, **in-app updates**, activity log, Restore Auto) tucked under **Advanced**
 - Smart holds fan speed after a heat spike so it does not chatter high/low every second
 - Right-click the menu-bar icon for **Restore Auto** and **Quit**
-- Launch at Login + remembers last preset / speed
+- Launch at Login. Presets are not remembered — **Quit** (and helper disconnect) restores system Auto
 - English UI by default, in-app **English / 中文**
 - Apple Silicon SMC (`F%dmd` / `F%dMd`, optional `Ftst`)
 - CLI: `airpulse-cli probe [--write]` / `preset <auto\|custom\|smart>`
