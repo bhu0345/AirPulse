@@ -151,19 +151,28 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   func setLinkedFraction(_ fraction: Double, reply: @escaping (Bool, String?) -> Void) {
     do {
       let c = try ensureController()
-      _ = try c.setLinkedFraction(fraction)
+      let applied = flooredFraction(fraction, controller: c)
+      _ = try c.setLinkedFraction(applied)
       // Smart applies speeds through this same write path. Keep Smart so
       // reassert continues to hold / decay instead of becoming a fixed Custom.
       if desiredPreset != .smart {
         desiredPreset = .custom
         smartGovernor.reset()
       }
-      desiredFraction = fraction
+      desiredFraction = applied
       startReassert()
       reply(true, nil)
     } catch {
       reply(false, error.localizedDescription)
     }
+  }
+
+  /// Safety is a floor. A 90°C emergency used to be stored as 0.85 and then
+  /// reasserted, which capped fans under the speed macOS Auto was already using.
+  private func flooredFraction(_ fraction: Double, controller: FanController) -> Double {
+    let temp = controller.maxPrimaryTemperature()
+    _ = safety.evaluate(maxTemp: temp)
+    return min(1, max(0, max(fraction, safety.minimumFraction())))
   }
 
   func setFanRPM(_ fanIndex: UInt, rpm: Float, reply: @escaping (Bool, String?) -> Void) {
@@ -232,8 +241,15 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       stopReassert()
       return
     case .forceEmergencyCool:
-      desiredFraction = FanPreset.emergencyCoolFraction
-      if desiredPreset != .smart {
+      // Floor only. Assigning the emergency fraction here used to pull a
+      // faster Smart / Auto command back down to 85%.
+      let floor = FanPreset.emergencyCoolFraction
+      if let current = desiredFraction {
+        desiredFraction = max(current, floor)
+      } else if desiredPreset != .auto {
+        desiredFraction = floor
+      }
+      if desiredPreset != .smart, desiredPreset != .auto {
         desiredPreset = .custom
       }
     case .raiseHighFloor, .raiseLowFloor:

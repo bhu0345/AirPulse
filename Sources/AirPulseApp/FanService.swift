@@ -696,7 +696,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
       self.safetyNotice = self.L.safetyWarning
       self.statusMessage = self.L.safetyWarning
     }
-    applyLinkedFraction(FanPreset.emergencyCoolFraction, userInitiated: false)
+    let floor = FanPreset.emergencyCoolFraction
+    guard linkedFraction + 0.01 < floor else { return }
+    applyLinkedFraction(floor, userInitiated: false)
   }
 
   private func applyCurveFraction(force: Bool = false) {
@@ -869,9 +871,12 @@ final class FanService: ObservableObject, @unchecked Sendable {
         "safety",
         String(format: "Emergency cool at %.1f°C (preset %@)", maxTemp ?? 0, activePreset.rawValue)
       )
-      if activePreset == .smart, canWrite {
+      // Auto stays with macOS. Seizing manual control at 90°C wrote 85% and
+      // slowed fans the system had already pushed to the hardware max.
+      guard desiredManual, activePreset != .auto, canWrite else { break }
+      if activePreset == .smart {
         applyCurveFraction(force: true)
-      } else if canWrite {
+      } else {
         applyEmergencyCool()
       }
     case .raiseHighFloor, .raiseLowFloor:

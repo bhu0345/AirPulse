@@ -106,7 +106,9 @@ public enum FanPreset: String, CaseIterable, Sendable, Codable, Identifiable {
   public var isFeatured: Bool { self == .smart }
 
   /// Fraction used when thermal safety forces strong cooling (no Cool preset).
-  public static let emergencyCoolFraction: Double = 0.85
+  /// Full range: 0.85 sat below what macOS Auto already commands on a hot M5 Pro,
+  /// so the "floor" became a cap (target 6999 of a 7826 max).
+  public static let emergencyCoolFraction: Double = 1
 }
 
 public enum SensorCatalog {

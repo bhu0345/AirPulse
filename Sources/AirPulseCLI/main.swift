@@ -12,6 +12,8 @@ struct AirPulseCLI {
       exit(1)
     }
 
+    SafetyPolicy.selfCheck()
+
     do {
       switch command {
       case "probe":

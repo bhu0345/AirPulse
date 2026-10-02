@@ -73,7 +73,7 @@ Also: restore Auto on quit / helper disconnect (presets are not remembered), hel
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.5**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.6**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**

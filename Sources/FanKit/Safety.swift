@@ -147,6 +147,18 @@ public struct SafetyPolicy: Sendable {
   public mutating func reset() {
     activeFloor = .none
   }
+
+  /// Emergency cooling is a floor at full speed. A slower constant lets a hot
+  /// machine get capped under the RPM macOS Auto was already using.
+  public static func selfCheck() {
+    var hot = SafetyPolicy()
+    precondition(hot.evaluate(maxTemp: 96) == .forceEmergencyCool)
+    precondition(hot.minimumFraction() == 1)
+    precondition(max(0.95, hot.minimumFraction()) == 1)
+    var warm = SafetyPolicy()
+    precondition(warm.evaluate(maxTemp: 70) == .none)
+    precondition(warm.minimumFraction() == 0)
+  }
 }
 
 /// Default piecewise temperature → fan fraction curve (Smart preset).
