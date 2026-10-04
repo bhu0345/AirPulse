@@ -310,11 +310,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func installPanelContent(_ panel: MenuBarPanel) {
-    panel.contentView = NSHostingView(
+    let hostingView = NSHostingView(
       rootView: PanelContent(service: service) { [weak self] size in
         self?.panelContentDidResize(to: size)
       }
     )
+    // Only SizeReporter resizes the panel. The default min / max options also
+    // snapped the window to the end size of an animated change (opening the
+    // activity log) before SizeReporter pulled it back: a frame of empty or
+    // clipped panel. Intrinsic size alone still gives the first open its fittingSize.
+    hostingView.sizingOptions = [.intrinsicContentSize]
+    panel.contentView = hostingView
   }
 
   private func watchForOutsideClicks() {
