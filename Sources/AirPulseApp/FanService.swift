@@ -130,6 +130,7 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private var pollTimer: DispatchSourceTimer?
   private var localController: FanController?
   private var safety = SafetyPolicy()
+  private var lastSafetyAction: SafetyAction = .none
   private var wakeObserver: NSObjectProtocol?
   private var desiredManual = false
   private var isStarted = false
@@ -171,10 +172,6 @@ final class FanService: ObservableObject, @unchecked Sendable {
     defaults.set(linkedEnabled, forKey: SettingsKeys.linkedEnabled)
     defaults.set(desiredManual, forKey: SettingsKeys.desiredManual)
     defaults.set(launchAtLoginEnabled, forKey: SettingsKeys.launchAtLogin)
-  }
-
-  func persistLinkedEnabled() {
-    onMain { self.persistSettings() }
   }
 
   private func loadPersistedSettings() {
@@ -558,12 +555,6 @@ final class FanService: ObservableObject, @unchecked Sendable {
         }
         if !Self.sameTemps(temps, self.temperatures) { self.temperatures = temps }
         if summary != self.hardwareSummary { self.hardwareSummary = summary }
-        if self.unlinkRPM.isEmpty {
-          for fan in newFans {
-            let span = max(1, fan.maxRPM - fan.minRPM)
-            self.unlinkRPM[fan.index] = Double((fan.actualRPM - fan.minRPM) / span)
-          }
-        }
         // Keep the user's slider position as source of truth in manual mode;
         // never yank it back from hardware while dragging or after a write.
         self.enforceSafetyLocally()
@@ -616,16 +607,23 @@ final class FanService: ObservableObject, @unchecked Sendable {
 
     if preset == .smart {
       xpc?.applyPreset(preset.rawValue) { [weak self] ok, err in
-        if let self, !ok {
-          self.log.warning("smart", err ?? "Helper applyPreset smart failed")
+        DispatchQueue.main.async {
+          guard let self else { return }
+          if !ok {
+            self.log.warning("smart", err ?? "Helper applyPreset smart failed")
+          }
+          self.applyCurveFraction(force: true)
         }
-        self?.applyCurveFraction(force: true)
       }
       return
     }
 
     if preset == .custom {
-      applyLinkedFraction(customFraction, userInitiated: false)
+      if linkedEnabled {
+        applyLinkedFraction(customFraction, userInitiated: false)
+      } else {
+        holdUnlinkedFans(moved: nil)
+      }
       return
     }
 
@@ -691,16 +689,6 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
   }
 
-  private func applyEmergencyCool() {
-    onMain {
-      self.safetyNotice = self.L.safetyWarning
-      self.statusMessage = self.L.safetyWarning
-    }
-    let floor = FanPreset.emergencyCoolFraction
-    guard linkedFraction + 0.01 < floor else { return }
-    applyLinkedFraction(floor, userInitiated: false)
-  }
-
   private func applyCurveFraction(force: Bool = false) {
     guard canWrite, activePreset == .smart else { return }
     let temp = maxPrimaryTemp ?? localController?.maxPrimaryTemperature() ?? 60
@@ -751,26 +739,68 @@ final class FanService: ObservableObject, @unchecked Sendable {
     }
   }
 
+  /// Per-fan speeds are manual Custom control: Smart stops and the chip shows
+  /// Custom instead of the preset the fans were taken from.
   func applyUnlinked(fanIndex: Int, fraction: Double) {
+    resetSmartGovernor()
     onMain {
-      self.unlinkRPM[fanIndex] = fraction
+      self.unlinkRPM[fanIndex] = min(1, max(0, fraction))
+      if self.activePreset != .custom {
+        self.log.info("preset", "\(self.activePreset.rawValue) → custom (per fan)")
+      }
+      self.activePreset = .custom
       self.desiredManual = true
       self.persistSettings()
     }
-    guard let fan = fans.first(where: { $0.index == fanIndex }) else { return }
-    let rpm = fan.minRPM + Float(fraction) * (fan.maxRPM - fan.minRPM)
+    holdUnlinkedFans(moved: fanIndex)
+  }
+
+  /// Sends every fan its own slider value, so fans the user has not touched
+  /// stay where their slider shows instead of on a stale linked or Smart speed.
+  private func holdUnlinkedFans(moved: Int?) {
     guard requireWriteAccess() else { return }
-    xpc?.setFanRPM(UInt(fanIndex), rpm: rpm) { [weak self] ok, err in
-      DispatchQueue.main.async {
-        guard let self else { return }
-        if ok {
-          self.statusMessage = self.L.fanRPMStatus(fanIndex, rpm: Int(rpm))
-          self.log.info("fan", "Fan \(fanIndex) → \(Int(rpm)) RPM")
-        } else {
-          self.statusMessage = err ?? self.L.failed
-          self.log.error("fan", err ?? self.L.failed)
+    let fans = self.fans
+    onMain {
+      for fan in fans where self.unlinkRPM[fan.index] == nil {
+        self.unlinkRPM[fan.index] = self.linkedFraction
+      }
+    }
+    for fan in fans {
+      let fraction = unlinkRPM[fan.index] ?? linkedFraction
+      let rpm = fan.minRPM + Float(fraction) * (fan.maxRPM - fan.minRPM)
+      xpc?.setFanRPM(UInt(fan.index), rpm: rpm) { [weak self] ok, err in
+        DispatchQueue.main.async {
+          guard let self else { return }
+          if !ok {
+            self.statusMessage = err ?? self.L.failed
+            self.log.error("fan", err ?? self.L.failed)
+          } else if fan.index == moved {
+            self.statusMessage = self.L.fanRPMStatus(fan.index, rpm: Int(rpm))
+            self.log.info("fan", "Fan \(fan.index) → \(Int(rpm)) RPM")
+          } else if moved == nil, fan.index == fans.last?.index {
+            self.statusMessage = self.L.presetStatus(.custom)
+          }
+          self.refresh()
         }
-        self.refresh()
+      }
+    }
+  }
+
+  /// Unlinking starts every fan at the current speed. In Custom the fans move
+  /// over at once, so the helper never holds a linked speed the UI no longer shows.
+  func setLinkedEnabled(_ enabled: Bool) {
+    onMain {
+      self.linkedEnabled = enabled
+      self.persistSettings()
+      if !enabled {
+        let start = self.activePreset == .custom ? self.customFraction : self.linkedFraction
+        self.unlinkRPM = Dictionary(uniqueKeysWithValues: self.fans.map { ($0.index, start) })
+      }
+      guard self.activePreset == .custom, self.desiredManual else { return }
+      if enabled {
+        self.applyLinkedFraction(self.customFraction, userInitiated: false)
+      } else {
+        self.holdUnlinkedFans(moved: nil)
       }
     }
   }
@@ -845,11 +875,9 @@ final class FanService: ObservableObject, @unchecked Sendable {
       if self.activePreset == .smart {
         self.applyCurveFraction(force: true)
       } else if self.linkedEnabled {
-        self.applyLinkedFraction(self.linkedFraction, userInitiated: false)
+        self.applyLinkedFraction(self.customFraction, userInitiated: false)
       } else {
-        for (index, fraction) in self.unlinkRPM {
-          self.applyUnlinked(fanIndex: index, fraction: fraction)
-        }
+        self.holdUnlinkedFans(moved: nil)
       }
     }
   }
@@ -857,39 +885,33 @@ final class FanService: ObservableObject, @unchecked Sendable {
   private func enforceSafetyLocally() {
     // Caller must be on main.
     let maxTemp = temperatures.map(\.celsius).max()
-    switch safety.evaluate(maxTemp: maxTemp) {
+    let action = safety.evaluate(maxTemp: maxTemp)
+    // Log tier changes, not every tick of a long heat spell: the ring buffer
+    // would lose everything else.
+    let tierChanged = action != lastSafetyAction
+    lastSafetyAction = action
+    switch action {
     case .restoreAuto:
       safetyNotice = L.safetyCritical
-      log.warning(
-        "safety",
-        String(format: "Critical %.1f°C — restore Auto", maxTemp ?? 0)
-      )
+      if tierChanged {
+        log.warning("safety", String(format: "Critical %.1f°C — restore Auto", maxTemp ?? 0))
+      }
       if desiredManual, canWrite { restoreAuto() }
+      return
     case .forceEmergencyCool:
       safetyNotice = L.safetyWarning
-      log.warning(
-        "safety",
-        String(format: "Emergency cool at %.1f°C (preset %@)", maxTemp ?? 0, activePreset.rawValue)
-      )
-      // Auto stays with macOS. Seizing manual control at 90°C wrote 85% and
-      // slowed fans the system had already pushed to the hardware max.
-      guard desiredManual, activePreset != .auto, canWrite else { break }
-      if activePreset == .smart {
-        applyCurveFraction(force: true)
-      } else {
-        applyEmergencyCool()
+      if tierChanged {
+        log.warning(
+          "safety",
+          String(format: "Emergency cool at %.1f°C (preset %@)", maxTemp ?? 0, activePreset.rawValue)
+        )
       }
     case .raiseHighFloor, .raiseLowFloor:
-      if desiredManual {
-        if activePreset == .smart, canWrite {
-          applyCurveFraction(force: false)
-        } else {
-          let floor = safety.minimumFraction()
-          if linkedFraction + 0.01 < floor, canWrite {
-            safetyNotice = L.safetyThermalFloor
-            applyLinkedFraction(floor, userInitiated: false)
-          }
-        }
+      // The helper raises per-fan targets to the floor on its own.
+      if desiredManual, activePreset == .custom, !linkedEnabled,
+        unlinkRPM.values.contains(where: { $0 + 0.01 < safety.minimumFraction() })
+      {
+        safetyNotice = L.safetyThermalFloor
       }
     case .none:
       if safetyNotice == L.safetyCritical || safetyNotice == L.safetyWarning
@@ -903,8 +925,18 @@ final class FanService: ObservableObject, @unchecked Sendable {
       }
     }
 
-    if activePreset == .smart, canWrite, !isDraggingSlider {
-      applyCurveFraction(force: false)
+    // Auto stays with macOS. Seizing manual control at 90°C wrote 85% and
+    // slowed fans the system had already pushed to the hardware max.
+    guard desiredManual, canWrite, !isDraggingSlider else { return }
+    if activePreset == .smart {
+      applyCurveFraction(force: action == .forceEmergencyCool)
+    } else if activePreset == .custom, linkedEnabled {
+      // The floor sits on top of the user's speed: fans rise to it, then come
+      // back down once it disengages instead of staying at the raised level.
+      let target = max(customFraction, safety.minimumFraction())
+      if abs(linkedFraction - target) > 0.01 {
+        applyLinkedFraction(customFraction, userInitiated: false)
+      }
     }
   }
 }

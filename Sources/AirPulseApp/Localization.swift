@@ -6,6 +6,14 @@ enum AppLanguage: String, CaseIterable, Identifiable {
   case english = "en"
   case chinese = "zh-Hans"
 
+  static let defaultsKey = "airpulse.language"
+
+  /// The language picked in Advanced, English if none.
+  static var saved: AppLanguage {
+    UserDefaults.standard.string(forKey: defaultsKey).flatMap(AppLanguage.init(rawValue:))
+      ?? .english
+  }
+
   var id: String { rawValue }
 
   var displayName: String {
@@ -19,11 +27,10 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 @MainActor
 final class LanguageStore: ObservableObject {
   static let shared = LanguageStore()
-  private static let defaultsKey = "airpulse.language"
 
   @Published var language: AppLanguage {
     didSet {
-      UserDefaults.standard.set(language.rawValue, forKey: Self.defaultsKey)
+      UserDefaults.standard.set(language.rawValue, forKey: AppLanguage.defaultsKey)
       L10n.cachedLanguage = language
     }
   }
@@ -31,13 +38,7 @@ final class LanguageStore: ObservableObject {
   var strings: L10n { L10n(language: language) }
 
   private init() {
-    if let raw = UserDefaults.standard.string(forKey: Self.defaultsKey),
-      let saved = AppLanguage(rawValue: raw)
-    {
-      language = saved
-    } else {
-      language = .english
-    }
+    language = .saved
     L10n.cachedLanguage = language
   }
 }
@@ -45,8 +46,10 @@ final class LanguageStore: ObservableObject {
 struct L10n {
   let language: AppLanguage
 
-  /// Thread-safe snapshot for background / XPC-adjacent code.
-  nonisolated(unsafe) static var cachedLanguage: AppLanguage = .english
+  /// Thread-safe snapshot for background / XPC-adjacent code. Read from
+  /// defaults, not left at English until the panel first creates
+  /// LanguageStore: the service writes status text at launch.
+  nonisolated(unsafe) static var cachedLanguage: AppLanguage = .saved
 
   nonisolated static var current: L10n { L10n(language: cachedLanguage) }
 

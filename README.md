@@ -66,14 +66,16 @@ Leaving fans too low under load can pack heat. AirPulse actively prevents that �
 |-----------|--------|
 | **≥78°C** | Minimum floor ≈45% (drops only after cooling ~4°C) |
 | **≥85°C** | Minimum floor ≈70% (with hysteresis) |
-| **≥90°C** | Emergency cool ≈85% (or Smart map, whichever is higher) |
+| **≥90°C** | Emergency floor: full speed in Custom / Smart (Auto stays with macOS) |
 | **≥100°C** | Hand control back to system **Auto** |
+
+Floors only ever raise the speed you chose. Once the Mac cools down, Custom drops back to your slider setting.
 
 Also: restore Auto on quit / helper disconnect (presets are not remembered), helper API version check, and re-assert after sleep/wake.
 
 ## Download
 
-Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.6**)
+Latest DMG: **[Releases](https://github.com/bhu0345/AirPulse/releases)** (current: **v1.0.7**)
 
 1. Download `AirPulse-x.y.z.dmg`
 2. Drag **AirPulse** into **Applications**

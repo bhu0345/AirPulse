@@ -4,9 +4,16 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> Building AirPulse (release)"
-swift build -c release --product airpulse-cli
-swift build -c release --product AirPulseHelper
-swift build -c release --product AirPulse
+# SwiftPM's default Swift Build engine links without SDKROOT, so clang stamps
+# the deployment target (14.0) as the SDK version. AppKit / SwiftUI then run in
+# macOS 14 compatibility mode (1.0.6 opened an empty Settings window at launch).
+# Hand the link step the SDK explicitly; the check below catches regressions.
+SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+BUILD_FLAGS=(-c release -Xswiftc -Xclang-linker -Xswiftc -isysroot -Xswiftc -Xclang-linker -Xswiftc "$SDK_PATH")
+swift build "${BUILD_FLAGS[@]}" --product airpulse-cli
+swift build "${BUILD_FLAGS[@]}" --product AirPulseHelper
+swift build "${BUILD_FLAGS[@]}" --product AirPulse
 
 BIN="$ROOT/.build/release"
 APP="$ROOT/Products/AirPulse.app"
@@ -21,6 +28,14 @@ mkdir -p "$MACOS" "$HELPERS" "$RES"
 cp "$BIN/AirPulse" "$MACOS/AirPulse"
 cp "$BIN/airpulse-cli" "$MACOS/airpulse-cli"
 cp "$BIN/AirPulseHelper" "$HELPERS/AirPulseHelper"
+
+for bin in "$MACOS/AirPulse" "$MACOS/airpulse-cli" "$HELPERS/AirPulseHelper"; do
+  linked="$(otool -l "$bin" | awk '/LC_BUILD_VERSION/ { found = 1 } found && $1 == "sdk" { print $2; exit }')"
+  if [[ "$linked" != "$SDK_VERSION" ]]; then
+    echo "error: $(basename "$bin") is stamped with SDK ${linked:-?}, expected $SDK_VERSION" >&2
+    exit 1
+  fi
+done
 
 if [[ -f "$ROOT/Resources/AppIcon.icns" ]]; then
   cp "$ROOT/Resources/AppIcon.icns" "$RES/AppIcon.icns"
@@ -42,9 +57,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0.6</string>
+  <string>1.0.7</string>
   <key>CFBundleVersion</key>
-  <string>17</string>
+  <string>18</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

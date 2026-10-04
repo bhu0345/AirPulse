@@ -505,9 +505,8 @@ struct MenuBarPopoverView: View {
             isOn: Binding(
               get: { service.linkedEnabled },
               set: { newValue in
-                service.linkedEnabled = newValue
+                service.setLinkedEnabled(newValue)
                 if !newValue { showAdvanced = true }
-                service.persistLinkedEnabled()
               }
             )
           )
@@ -580,7 +579,7 @@ struct MenuBarPopoverView: View {
         UnlinkedFanSliderRow(
           fan: fan,
           label: L.fanLabel(fan.index),
-          fraction: service.unlinkRPM[fan.index] ?? 0.3,
+          fraction: service.unlinkRPM[fan.index] ?? service.linkedFraction,
           disabled: service.linkedEnabled,
           onEditingChanged: { editing in
             service.isDraggingSlider = editing

@@ -3,17 +3,42 @@ import Combine
 import FanKit
 import SwiftUI
 
+/// Plain AppKit entry point. The whole UI is a status item (see AppDelegate) so
+/// that a right-click can open a menu instead of the panel. A SwiftUI `App`
+/// would demand a scene, and the placeholder `Settings` scene it used to carry
+/// opened as an empty "AirPulse Settings" window at launch (issue #5).
 @main
-struct AirPulseApp: App {
-  @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+@MainActor
+enum AirPulseMain {
+  static func main() {
+    let app = NSApplication.shared
+    let delegate = AppDelegate()
+    app.delegate = delegate
+    app.mainMenu = makeMainMenu()
+    withExtendedLifetime(delegate) { app.run() }
+  }
 
-  var body: some Scene {
-    // The whole UI is an AppKit status item (see AppDelegate) so that a
-    // right-click can open a menu instead of the panel. `App` still demands
-    // a scene, and an accessory app never surfaces this one.
-    Settings {
-      EmptyView()
+  /// Never shown for an agent app, but AppKit routes ⌘Q and the Edit
+  /// shortcuts (copying from the activity log) through it.
+  private static func makeMainMenu() -> NSMenu {
+    let appMenu = NSMenu()
+    appMenu.addItem(
+      withTitle: "Quit AirPulse", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+
+    let editMenu = NSMenu(title: "Edit")
+    editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    editMenu.addItem(
+      withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+    let mainMenu = NSMenu()
+    for submenu in [appMenu, editMenu] {
+      let item = NSMenuItem()
+      item.submenu = submenu
+      mainMenu.addItem(item)
     }
+    return mainMenu
   }
 }
 
@@ -124,15 +149,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       object: nil
     )
     service.start()
-
   }
 
   func applicationWillTerminate(_ notification: Notification) {
     service.prepareToTerminate(waitSeconds: 1.5)
-  }
-
-  func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-    false
   }
 
   // MARK: - Status item

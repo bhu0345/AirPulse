@@ -10,10 +10,17 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   private var controller: FanController?
   private var safety = SafetyPolicy()
   private var reassertTimer: DispatchSourceTimer?
+  /// What the app asked for, before the thermal floor. Floors are applied on
+  /// every write so fans come back down once a floor disengages.
   private var desiredFraction: Double?
+  /// Per-fan targets from `setFanRPM`. While set they replace the linked fraction.
+  private var desiredFanRPM: [Int: Float] = [:]
   private var desiredPreset: FanPreset = .auto
   private var smartGovernor = SmartGovernor()
   private let queue = DispatchQueue(label: "com.bingtaohu.AirPulse.helper")
+  /// XPC requests arrive on connection queues while the reassert timer runs on
+  /// `queue`; both read and write the state above and the SMC.
+  private let stateLock = NSLock()
   private var connectionCount = 0
   private let connectionLock = NSLock()
 
@@ -57,19 +64,24 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       let remaining = self.connectionCount
       self.connectionLock.unlock()
       if remaining == 0 {
-        self.restoreIfNeededOnClientGone()
+        self.restoreOnClientGone()
         DispatchQueue.main.async { exit(0) }
       }
     }
   }
 
-  private func restoreIfNeededOnClientGone() {
-    guard desiredPreset != .auto || desiredFraction != nil else { return }
+  /// Nobody is managing the fans any more, so hand them back to macOS whatever
+  /// was asked for last. Guarding on the preset let a crashed app strand a fan
+  /// it had set on its own in manual mode, with no thermal floor.
+  private func restoreOnClientGone() {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    stopReassert()
     try? ensureController().restoreSystemControl()
     desiredPreset = .auto
     desiredFraction = nil
+    desiredFanRPM.removeAll()
     smartGovernor.reset()
-    stopReassert()
   }
 
   private func ensureController() throws -> FanController {
@@ -85,6 +97,8 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   }
 
   func openSMC(reply: @escaping (Bool, String?) -> Void) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       _ = try ensureController()
       reply(true, nil)
@@ -94,6 +108,8 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   }
 
   func warmupManual(reply: @escaping (Bool, String?) -> Void) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       try ensureController().warmupManualMode()
       reply(true, nil)
@@ -103,6 +119,8 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   }
 
   func listFans(reply: @escaping ([Data]?, String?) -> Void) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       let fans = try ensureController().allFans()
       reply(fans.compactMap { AirPulseCoding.encode($0) }, nil)
@@ -112,6 +130,8 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   }
 
   func listTemperatures(reply: @escaping ([Data]?, String?) -> Void) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       let temps = try ensureController().readTemperatures(primaryOnly: false)
       reply(temps.compactMap { AirPulseCoding.encode($0) }, nil)
@@ -125,10 +145,13 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
       reply(false, "Unknown preset")
       return
     }
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       let c = try ensureController()
       _ = try c.applyPreset(preset)
       desiredPreset = preset
+      desiredFanRPM.removeAll()
       if preset == .smart {
         smartGovernor.reset()
         let temp = c.maxPrimaryTemperature() ?? 60
@@ -149,6 +172,8 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   }
 
   func setLinkedFraction(_ fraction: Double, reply: @escaping (Bool, String?) -> Void) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       let c = try ensureController()
       let applied = flooredFraction(fraction, controller: c)
@@ -159,7 +184,8 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
         desiredPreset = .custom
         smartGovernor.reset()
       }
-      desiredFraction = applied
+      desiredFraction = min(1, max(0, fraction))
+      desiredFanRPM.removeAll()
       startReassert()
       reply(true, nil)
     } catch {
@@ -175,11 +201,19 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
     return min(1, max(0, max(fraction, safety.minimumFraction())))
   }
 
+  /// Per-fan control. Reasserting the linked speed used to overwrite this
+  /// within two seconds, so the target is held here instead.
   func setFanRPM(_ fanIndex: UInt, rpm: Float, reply: @escaping (Bool, String?) -> Void) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       let c = try ensureController()
-      _ = try c.enableManualMode(fanIndex: Int(fanIndex))
-      try c.setTargetRPM(fanIndex: Int(fanIndex), rpm: rpm)
+      _ = safety.evaluate(maxTemp: c.maxPrimaryTemperature())
+      desiredFanRPM[Int(fanIndex)] = rpm
+      desiredPreset = .custom
+      desiredFraction = nil
+      smartGovernor.reset()
+      try holdFanTargets(c)
       startReassert()
       reply(true, nil)
     } catch {
@@ -187,11 +221,26 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
     }
   }
 
+  /// Writes every per-fan target, raised to the current thermal floor.
+  private func holdFanTargets(_ c: FanController) throws {
+    let floor = Float(safety.minimumFraction())
+    for fan in try c.allFans() {
+      guard let rpm = desiredFanRPM[fan.index] else { continue }
+      let span = max(0, fan.maxRPM - fan.minRPM)
+      let target = min(fan.maxRPM, max(rpm, fan.minRPM + floor * span))
+      _ = try c.enableManualMode(fanIndex: fan.index)
+      try c.setTargetRPM(fanIndex: fan.index, rpm: target)
+    }
+  }
+
   func restoreAuto(reply: @escaping (Bool, String?) -> Void) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       try ensureController().restoreSystemControl()
       desiredPreset = .auto
       desiredFraction = nil
+      desiredFanRPM.removeAll()
       smartGovernor.reset()
       stopReassert()
       reply(true, nil)
@@ -201,6 +250,8 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   }
 
   func hardwareInfo(reply: @escaping ([String: String]) -> Void) {
+    stateLock.lock()
+    defer { stateLock.unlock() }
     do {
       let c = try ensureController()
       reply([
@@ -231,61 +282,25 @@ final class AirPulseHelperService: NSObject, NSXPCListenerDelegate, AirPulseHelp
   }
 
   private func reassertAndEnforceSafety() {
-    guard let c = try? ensureController() else { return }
-    let maxTemp = c.maxPrimaryTemperature()
-    switch safety.evaluate(maxTemp: maxTemp) {
-    case .restoreAuto:
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    // A tick can already be waiting on the lock when restoreAuto cancels the timer.
+    guard reassertTimer != nil, let c = try? ensureController() else { return }
+    if safety.evaluate(maxTemp: c.maxPrimaryTemperature()) == .restoreAuto {
       try? c.restoreSystemControl()
       desiredPreset = .auto
       desiredFraction = nil
+      desiredFanRPM.removeAll()
       stopReassert()
       return
-    case .forceEmergencyCool:
-      // Floor only. Assigning the emergency fraction here used to pull a
-      // faster Smart / Auto command back down to 85%.
-      let floor = FanPreset.emergencyCoolFraction
-      if let current = desiredFraction {
-        desiredFraction = max(current, floor)
-      } else if desiredPreset != .auto {
-        desiredFraction = floor
-      }
-      if desiredPreset != .smart, desiredPreset != .auto {
-        desiredPreset = .custom
-      }
-    case .raiseHighFloor, .raiseLowFloor:
-      let floor = safety.minimumFraction()
-      if let f = desiredFraction, f < floor {
-        desiredFraction = floor
-        if desiredPreset != .smart {
-          desiredPreset = .custom
-        }
-      }
-    case .none:
-      break
     }
-
-    if desiredPreset == .smart {
-      // The app owns hold / decay. Reassert the last commanded speed so the
-      // helper cannot drop fans on a 1-second temperature dip.
-      if var fraction = desiredFraction {
-        fraction = max(fraction, safety.minimumFraction())
-        desiredFraction = fraction
-        _ = try? c.setLinkedFraction(fraction)
-        return
-      }
-      if let temp = maxTemp {
-        var fraction = smartGovernor.evaluate(celsius: temp).appliedFraction
-        fraction = max(fraction, safety.minimumFraction())
-        desiredFraction = fraction
-        _ = try? c.setLinkedFraction(fraction)
-      }
-      return
-    }
-
-    if var fraction = desiredFraction {
-      fraction = max(fraction, safety.minimumFraction())
-      desiredFraction = fraction
-      _ = try? c.setLinkedFraction(fraction)
+    // Hold the last command — Smart's too: the app owns hold / decay, so a
+    // 1-second temperature dip cannot drop the fans. The floor goes on top at
+    // write time only; storing it kept Custom at full speed after a 90°C spike.
+    if !desiredFanRPM.isEmpty {
+      try? holdFanTargets(c)
+    } else if let fraction = desiredFraction {
+      _ = try? c.setLinkedFraction(max(fraction, safety.minimumFraction()))
     }
   }
 }
